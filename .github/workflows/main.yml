@@ -19,7 +19,7 @@ jobs:
           cp -r legal-doc-saas/. .
           rm -rf legal-doc-saas
           rm -f legal-doc-saas-phase2-ui-1.zip
-          rm -f legal-doc-saas-phase3-1.zip
+          rm -f legal-doc-saas-phase3.zip
 
       - name: Commit extracted project
         run: |
