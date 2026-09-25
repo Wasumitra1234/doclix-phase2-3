@@ -1,0 +1,30 @@
+name: Extract Phase 3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract Phase 3
+        run: |
+          unzip -o legal-doc-saas-phase3-1.zip
+          cp -r legal-doc-saas/. .
+          rm -rf legal-doc-saas
+          rm -f legal-doc-saas-phase2-ui-1.zip
+          rm -f legal-doc-saas-phase3-1.zip
+
+      - name: Commit extracted project
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Extract Phase 3 project" || echo "Nothing to commit"
+          git push
