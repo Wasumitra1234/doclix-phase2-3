@@ -101,12 +101,12 @@ export const documentsApi = {
     a.remove();
     URL.revokeObjectURL(url);
     // Android share if available
-    if (navigator.share && blob) {
+    if (typeof navigator.share === "function" && blob) { {
       try {
         const file = new File([blob], fileName || "document.pdf", {
           type: "application/pdf",
         });
-        if (navigator.canShare?.({ files: [file] })) {
+        if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {{ files: [file] })) {
           // optional — user can share from download sheet
         }
       } catch {
