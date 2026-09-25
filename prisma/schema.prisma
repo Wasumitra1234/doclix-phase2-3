@@ -1,0 +1,589 @@
+// =============================================================================
+// Legal Document Automation SaaS - Prisma Schema (Phase 1)
+// Multi-tenant | Versioned Templates | Subscription + Usage | Audit + Webhooks
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum Role {
+  SUPER_ADMIN
+  VENDOR_ADMIN
+  ADVOCATE
+  LEGAL_TYPIST
+  STAFF
+}
+
+enum PlanInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  PAUSED
+}
+
+enum DocumentStatus {
+  DRAFT
+  GENERATED
+  FINALIZED
+  ARCHIVED
+  DELETED
+}
+
+enum UploadPurpose {
+  AADHAAR
+  PAN
+  PROPERTY_DOC
+  IDENTITY
+  ADDRESS_PROOF
+  OTHER
+  GENERATED_PDF
+  STAMP_PAPER_SCAN
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+  DELETED
+}
+
+enum Language {
+  EN
+  HI
+  TA
+  TE
+  KN
+  ML
+  MR
+  GU
+  BN
+  PA
+  OR
+}
+
+enum IndianState {
+  AN // Andaman and Nicobar
+  AP // Andhra Pradesh
+  AR // Arunachal Pradesh
+  AS // Assam
+  BR // Bihar
+  CH // Chandigarh
+  CT // Chhattisgarh
+  DN // Dadra and Nagar Haveli and Daman and Diu
+  DL // Delhi
+  GA // Goa
+  GJ // Gujarat
+  HR // Haryana
+  HP // Himachal Pradesh
+  JK // Jammu and Kashmir
+  JH // Jharkhand
+  KA // Karnataka
+  KL // Kerala
+  LA // Ladakh
+  LD // Lakshadweep
+  MP // Madhya Pradesh
+  MH // Maharashtra
+  MN // Manipur
+  ML // Meghalaya
+  MZ // Mizoram
+  NL // Nagaland
+  OR // Odisha
+  PY // Puducherry
+  PB // Punjab
+  RJ // Rajasthan
+  SK // Sikkim
+  TN // Tamil Nadu
+  TS // Telangana
+  TR // Tripura
+  UP // Uttar Pradesh
+  UK // Uttarakhand
+  WB // West Bengal
+  ALL // Pan-India / common
+}
+
+enum UsageMetric {
+  DOCUMENTS_GENERATED
+  OCR_PAGES
+  AI_TOKENS
+  STORAGE_MB
+  TEMPLATE_DOWNLOADS
+}
+
+enum WebhookProvider {
+  RAZORPAY
+  STRIPE // future
+  INTERNAL
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+// =============================================================================
+// CORE TENANT / USER MODELS
+// =============================================================================
+
+/// Organization / Tenant (Vendor firm, Advocate chamber, Typist office)
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  gstin       String?  // GST Identification Number
+  pan         String?
+  address     String?
+  city        String?
+  state       IndianState?
+  pincode     String?
+  phone       String?
+  email       String?
+  logoUrl     String?
+  isActive    Boolean  @default(true)
+  settings    Json?    // tenant-level config (default language, stamp paper prefs, etc.)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  subscriptions   Subscription[]
+  templates       Template[]          // tenant-owned custom templates (optional)
+  savedDocuments  SavedDocument[]
+  uploads         Upload[]
+  usageLedgers    UsageLedger[]
+  documentLogs    DocumentLog[]
+  generatedFiles  GeneratedFile[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("tenants")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String
+  email         String
+  phone         String?
+  passwordHash  String?
+  firstName     String
+  lastName      String?
+  role          Role      @default(LEGAL_TYPIST)
+  isActive      Boolean   @default(true)
+  emailVerified DateTime?
+  phoneVerified DateTime?
+  lastLoginAt   DateTime?
+  metadata      Json?     // preferences, bar council number, etc.
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  savedDocuments    SavedDocument[]
+  documentLogs      DocumentLog[]
+  uploads           Upload[]
+  usageLedgers      UsageLedger[]
+  generatedFiles    GeneratedFile[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// =============================================================================
+// SUBSCRIPTION & PLANS
+// =============================================================================
+
+model Plan {
+  id              String       @id @default(cuid())
+  code            String       @unique // e.g. STARTER, PRO, ENTERPRISE
+  name            String
+  description     String?
+  interval        PlanInterval
+  priceInPaise    Int          // amount in paise (INR * 100)
+  currency        String       @default("INR")
+  documentsLimit  Int          // max documents per billing period (-1 = unlimited)
+  storageLimitMb  Int          // storage quota in MB
+  ocrPagesLimit   Int          @default(0)
+  aiTokensLimit   Int          @default(0)
+  features        Json?        // feature flags: { "customTemplates": true, "multiUser": true, ... }
+  isActive        Boolean      @default(true)
+  sortOrder       Int          @default(0)
+  razorpayPlanId  String?      // mapped Razorpay plan id if using subscriptions
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive, sortOrder])
+  @@map("plans")
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  tenantId             String
+  planId               String
+  status               SubscriptionStatus @default(TRIALING)
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  trialEndsAt          DateTime?
+  cancelledAt          DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  razorpaySubscriptionId String?          @unique
+  razorpayCustomerId   String?
+  metadata             Json?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  usageLedgers UsageLedger[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+/// Tracks consumption against plan limits (documents, OCR pages, storage, tokens)
+model UsageLedger {
+  id             String      @id @default(cuid())
+  tenantId       String
+  subscriptionId String?
+  userId         String?
+  metric         UsageMetric
+  quantity       Int         // positive = consume, negative = credit/refund
+  unit           String      @default("count") // count | pages | tokens | mb
+  referenceType  String?     // e.g. "SavedDocument", "Upload", "GeneratedFile"
+  referenceId    String?
+  periodStart    DateTime    // billing period this usage belongs to
+  periodEnd      DateTime
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, metric, periodStart, periodEnd])
+  @@index([subscriptionId])
+  @@index([referenceType, referenceId])
+  @@map("usage_ledgers")
+}
+
+// =============================================================================
+// TEMPLATE SYSTEM (Versioned, State-specific, Immutable once used)
+// =============================================================================
+
+/// Logical template (e.g. "Sale Deed", "Affidavit", "Power of Attorney")
+model Template {
+  id              String      @id @default(cuid())
+  tenantId        String?     // null = system/global template; set = tenant custom
+  code            String      // unique per tenant or global, e.g. SALE_DEED_MH
+  name            String
+  description     String?
+  category        String?     // e.g. "Conveyance", "Affidavit", "Agreement"
+  state           IndianState @default(ALL)
+  language        Language    @default(EN)
+  isActive        Boolean     @default(true)
+  isSystem        Boolean     @default(false) // true for platform-provided
+  currentVersionId String?    @unique
+  tags            String[]    @default([])
+  metadata        Json?       // e.g. { "stampDutyHint": "...", "requiresWitness": true }
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant          Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  currentVersion  TemplateVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions        TemplateVersion[] @relation("TemplateVersions")
+  savedDocuments  SavedDocument[]
+
+  @@unique([tenantId, code, state, language])
+  @@index([tenantId])
+  @@index([code])
+  @@index([state, language])
+  @@index([isActive, isSystem])
+  @@map("templates")
+}
+
+/// Immutable version of a template. Once a SavedDocument references it, never mutate.
+model TemplateVersion {
+  id                String   @id @default(cuid())
+  templateId        String
+  version           Int      // sequential 1, 2, 3...
+  name              String?  // optional override name for this version
+  isPublished       Boolean  @default(false)
+  publishedAt       DateTime?
+
+  // ----- Document layout / page setup -----
+  pageSize          String   @default("A4") // A4 | LEGAL | etc.
+  orientation       String   @default("portrait")
+  // Margins in mm
+  marginTopMm       Float    @default(20)
+  marginBottomMm    Float    @default(20)
+  marginLeftMm      Float    @default(20)
+  marginRightMm     Float    @default(20)
+  // First-page stamp-paper top clearance (mm)  critical for Indian stamp paper
+  stampPaperTopClearanceMm Float @default(40)
+  // Font configuration
+  defaultFontFamily String   @default("Times New Roman")
+  defaultFontSizePt Float    @default(12)
+  headingFontFamily String?
+  headingFontSizePt Float?
+
+  // ----- Content -----
+  // Body content as structured blocks or HTML/Markdown with placeholders
+  // e.g. {{party1_name}}, {{property_description}}
+  bodyContent       String   // main template body (HTML or structured text)
+  // Clause library references (array of clause codes or embedded)
+  clauseRefs        Json?    // [{ "code": "RECITAL_STANDARD", "order": 1 }, ...]
+  // Header / Footer
+  headerContent     String?
+  footerContent     String?
+
+  // Form schema that drives the dynamic form UI
+  formSchemaId      String?  @unique
+  formSchema        FormSchema? @relation(fields: [formSchemaId], references: [id])
+
+  // Full snapshot for immutability / audit
+  snapshot          Json?    // complete serialised template at publish time
+
+  createdById       String?
+  createdAt         DateTime @default(now())
+  // No updatedAt  versions are immutable after publish
+
+  template          Template  @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  currentFor        Template? @relation("CurrentVersion")
+  savedDocuments    SavedDocument[]
+
+  @@unique([templateId, version])
+  @@index([templateId])
+  @@index([isPublished])
+  @@map("template_versions")
+}
+
+/// JSON Schema + UI schema for dynamic form fields of a template version
+model FormSchema {
+  id          String   @id @default(cuid())
+  name        String?
+  // JSON Schema draft-07 compatible for validation
+  jsonSchema  Json     // { "type": "object", "properties": { ... }, "required": [...] }
+  // UI hints: order, widgets, conditional visibility, groupings
+  uiSchema    Json?    // { "party1_name": { "ui:widget": "text", "ui:order": 1 }, ... }
+  // Field-level metadata (OCR mapping, AI suggestions, etc.)
+  fieldMeta   Json?    // { "party1_aadhaar": { "ocrSource": "aadhaar", "aiSuggest": true } }
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  // Immutable once linked to a published TemplateVersion
+
+  templateVersion TemplateVersion?
+
+  @@map("form_schemas")
+}
+
+// =============================================================================
+// DOCUMENTS
+// =============================================================================
+
+model SavedDocument {
+  id                String         @id @default(cuid())
+  tenantId          String
+  userId            String         // creator / owner
+  templateId        String
+  templateVersionId String         // pinned to immutable version
+  title             String
+  status            DocumentStatus @default(DRAFT)
+  // User-filled form data (validated against FormSchema.jsonSchema)
+  formData          Json
+  // Optional AI-assisted or OCR-extracted raw data
+  extractedData     Json?
+  // Language override if different from template
+  language          Language?
+  // State for stamp duty / jurisdiction context
+  state             IndianState?
+  // Soft delete
+  deletedAt         DateTime?
+  finalizedAt       DateTime?
+  metadata          Json?          // e.g. { "parties": [...], "stampPaperNumber": "..." }
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id])
+  template        Template        @relation(fields: [templateId], references: [id])
+  templateVersion TemplateVersion @relation(fields: [templateVersionId], references: [id])
+  logs            DocumentLog[]
+  generatedFiles  GeneratedFile[]
+  uploads         Upload[]        // supporting docs attached to this document
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([templateId])
+  @@index([templateVersionId])
+  @@index([status])
+  @@index([tenantId, status, createdAt])
+  @@map("saved_documents")
+}
+
+/// Audit trail for every significant action on a document
+model DocumentLog {
+  id              String   @id @default(cuid())
+  tenantId        String
+  documentId      String
+  userId          String?
+  action          String   // CREATED | UPDATED | GENERATED | FINALIZED | DOWNLOADED | SHARED | DELETED | RESTORED
+  details         Json?    // before/after snapshots, IP, user-agent, etc.
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document SavedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([userId])
+  @@map("document_logs")
+}
+
+// =============================================================================
+// STORAGE (Uploads + Generated PDFs)
+// =============================================================================
+
+model Upload {
+  id            String        @id @default(cuid())
+  tenantId      String
+  userId        String?
+  documentId    String?       // optional link to a SavedDocument
+  purpose       UploadPurpose
+  status        UploadStatus  @default(PENDING)
+  // Storage provider metadata (S3 / Cloudflare R2 ready)
+  storageProvider String      @default("local") // local | s3 | r2
+  bucket        String?
+  objectKey     String        // path inside bucket
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  checksum      String?       // sha256 for integrity
+  // OCR / processing results (future)
+  ocrText       String?
+  ocrData       Json?         // structured extraction
+  widthPx       Int?
+  heightPx      Int?
+  pageCount     Int?
+  metadata      Json?
+  expiresAt     DateTime?     // for temporary uploads
+  deletedAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  document SavedDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([documentId])
+  @@index([purpose, status])
+  @@index([objectKey])
+  @@map("uploads")
+}
+
+model GeneratedFile {
+  id            String   @id @default(cuid())
+  tenantId      String
+  documentId    String
+  userId        String?
+  // Storage metadata
+  storageProvider String @default("local")
+  bucket        String?
+  objectKey     String
+  fileName      String
+  mimeType      String   @default("application/pdf")
+  sizeBytes     Int
+  checksum      String?
+  // Generation context
+  templateVersionId String?
+  pageCount     Int?
+  isFinal       Boolean  @default(false)
+  metadata      Json?    // generation options, watermark, etc.
+  createdAt     DateTime @default(now())
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document SavedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([documentId])
+  @@index([objectKey])
+  @@map("generated_files")
+}
+
+// =============================================================================
+// RAZORPAY WEBHOOK IDEMPOTENCY + EVENT LOG
+// =============================================================================
+
+model WebhookEvent {
+  id              String                  @id @default(cuid())
+  provider        WebhookProvider         @default(RAZORPAY)
+  eventId         String                  // Razorpay event id (unique per provider)
+  eventType       String                  // payment.captured, subscription.activated, etc.
+  payload         Json
+  signature       String?                 // for verification audit
+  status          WebhookProcessingStatus @default(RECEIVED)
+  processedAt     DateTime?
+  errorMessage    String?
+  retryCount      Int                     @default(0)
+  // Link to affected entities if known
+  tenantId        String?
+  subscriptionId  String?
+  paymentId       String?                 // Razorpay payment id
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([provider, eventId]) // idempotency key
+  @@index([status, createdAt])
+  @@index([eventType])
+  @@index([tenantId])
+  @@map("webhook_events")
+}
+
+// =============================================================================
+// OPTIONAL: Simple internal job / outbox for reliability (Phase 1 ready)
+// =============================================================================
+
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  aggregateType String // Subscription | Document | Upload
+  aggregateId String
+  eventType   String
+  payload     Json
+  processed   Boolean  @default(false)
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([processed, createdAt])
+  @@map("outbox_events")
+}

@@ -1,0 +1,40 @@
+{
+  "name": "doclix",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Doclix – Legal Document Automation SaaS (Phase 3)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=@legal-doc/web",
+    "dev:api": "npm run dev --workspace=@legal-doc/api",
+    "build": "npm run build --workspaces --if-present",
+    "build:api": "prisma generate --schema=prisma/schema.prisma && npm run build --workspace=@legal-doc/api",
+    "build:web": "npm run build --workspace=@legal-doc/web",
+    "start:api": "prisma migrate deploy --schema=prisma/schema.prisma && npm run start --workspace=@legal-doc/api",
+    "start:web": "npm run start --workspace=@legal-doc/web",
+    "db:generate": "prisma generate --schema=prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema=prisma/schema.prisma",
+    "db:seed": "prisma db seed --schema=prisma/schema.prisma",
+    "db:push": "prisma db push --schema=prisma/schema.prisma",
+    "postinstall": "prisma generate --schema=prisma/schema.prisma"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

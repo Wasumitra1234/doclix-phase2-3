@@ -1,0 +1,10 @@
+{
+  "name": "Doclix",
+  "short_name": "Doclix",
+  "description": "Legal Document Automation",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "orientation": "portrait"
+}

@@ -1,0 +1,12 @@
+# Web (Next.js) service on Railway
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npm run build --workspace=@legal-doc/web"
+
+[deploy]
+startCommand = "npm run start --workspace=@legal-doc/web"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

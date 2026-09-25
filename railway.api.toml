@@ -1,0 +1,13 @@
+# Attach this config when creating the API service on Railway
+# Or rename to railway.toml in a branch/service with root = repo root
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npx prisma generate --schema=prisma/schema.prisma && npm run build --workspace=@legal-doc/api"
+
+[deploy]
+startCommand = "npx prisma migrate deploy --schema=prisma/schema.prisma && npm run start --workspace=@legal-doc/api"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
