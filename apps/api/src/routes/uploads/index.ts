@@ -14,7 +14,8 @@ const upload = multer({
     const ok =
       file.mimetype.startsWith("image/") ||
       file.mimetype === "application/pdf";
-    cb(ok ? null : new Error("Only images and PDF allowed"), ok);
+    const callback = cb as (error: Error | null, acceptFile: boolean) => void;
+    callback(ok ? null : new Error("Only images and PDF allowed"), ok);
   },
 });
 

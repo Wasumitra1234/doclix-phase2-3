@@ -1,5 +1,5 @@
 import { prisma } from "../../config/prisma";
-import { DocumentStatus } from "@prisma/client";
+import { Prisma, DocumentStatus } from "@prisma/client";
 
 export async function listDocuments(tenantId: string, userId: string, opts?: { status?: string }) {
   const where: any = {
@@ -96,7 +96,7 @@ export async function createDocument(input: {
       templateVersionId: template.currentVersionId,
       title: input.title || `${template.name} - ${new Date().toLocaleDateString("en-IN")}`,
       status: DocumentStatus.DRAFT,
-      formData: input.formData || {},
+      formData: (input.formData || {}) as Prisma.InputJsonValue,
       state: (input.state as any) || template.state,
       language: (input.language as any) || template.language,
     },
@@ -136,7 +136,7 @@ export async function updateDocument(
     where: { id },
     data: {
       ...(input.title !== undefined && { title: input.title }),
-      ...(input.formData !== undefined && { formData: input.formData }),
+      ...(input.formData !== undefined && { formData: input.formData as Prisma.InputJsonValue }),
       ...(input.status !== undefined && { status: input.status }),
     },
     include: {

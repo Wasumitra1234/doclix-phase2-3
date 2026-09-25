@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import { prisma } from "../../config/prisma";
 import { env } from "../../config/env";
 import { Role } from "@prisma/client";
@@ -22,17 +22,17 @@ export interface LoginInput {
 }
 
 function signToken(user: AuthUser): string {
-  return jwt.sign(
-    {
-      sub: user.id,
-      tenantId: user.tenantId,
-      email: user.email,
-      role: user.role,
-      firstName: user.firstName,
-    },
-    env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN }
-  );
+  const payload = {
+    sub: user.id,
+    tenantId: user.tenantId,
+    email: user.email,
+    role: user.role,
+    firstName: user.firstName,
+  };
+  const options: SignOptions = {
+    expiresIn: env.JWT_EXPIRES_IN as SignOptions["expiresIn"],
+  };
+  return jwt.sign(payload, env.JWT_SECRET, options);
 }
 
 export async function register(input: RegisterInput) {
