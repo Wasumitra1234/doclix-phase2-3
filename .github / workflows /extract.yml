@@ -3,12 +3,12 @@ name: Extract Project
 on:
   push:
     paths:
-      - "*.zip"
-
+      - "*.zip" 
+  workflow_dispatch:
 permissions:
   contents: write
 
-jobs:
+jobs:  
   extract:
     runs-on: ubuntu-latest
 
@@ -28,4 +28,4 @@ jobs:
           git config user.email "github-actions@github.com"
           git add .
           git commit -m "Extract Doclix project" || true
-          git push
+          git push  
