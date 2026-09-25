@@ -106,7 +106,7 @@ export const documentsApi = {
         const file = new File([blob], fileName || "document.pdf", {
           type: "application/pdf",
         });
-        if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {{ files: [file] })) {
+        e] }))
           // optional — user can share from download sheet
         }
       } catch {
@@ -116,7 +116,7 @@ export const documentsApi = {
     return blob;
   },
 };
-
+if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {{ files: [fil
 export const uploadsApi = {
   upload: async (file: File, opts?: { purpose?: string; documentId?: string; ocr?: boolean }) => {
     const fd = new FormData();
