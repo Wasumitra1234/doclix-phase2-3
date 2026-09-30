@@ -28,7 +28,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Autofill diagnostics"
+            android:text="Native Autofill diagnostics"
             android:textSize="13sp" />
 
         <EditText
@@ -95,13 +95,6 @@
             android:text="@string/save_data_card" />
 
         <Button
-            android:id="@+id/enable_assist"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="ENABLE DOCLIX FIELD ASSIST" />
-
-        <Button
             android:id="@+id/enable"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -112,7 +105,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Data is stored locally in this POC. OTP, CAPTCHA, face verification and payment remain manual."
+            android:text="Data is stored locally in this POC. Doclix uses the standard Android Autofill framework. OTP, CAPTCHA, face verification and payment remain manual."
             android:textSize="13sp" />
 
     </LinearLayout>
