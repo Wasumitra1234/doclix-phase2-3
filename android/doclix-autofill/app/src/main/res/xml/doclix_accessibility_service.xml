@@ -5,4 +5,4 @@
     android:notificationTimeout="50"
     android:canRetrieveWindowContent="true"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
-    android:description="Doclix fills the focused Chrome form field from the local Doclix Data Card." />
+    android:description="@string/service_description" />
