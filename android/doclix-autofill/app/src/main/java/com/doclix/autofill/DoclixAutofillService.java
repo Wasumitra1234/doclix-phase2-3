@@ -28,6 +28,7 @@ import java.util.Locale;
 
 public class DoclixAutofillService extends AutofillService {
     private static final String PREFS = "doclix_data_card";
+    private static final String DIAG = "doclix_autofill_diag";
 
     private String value(String key) {
         return getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -39,6 +40,10 @@ public class DoclixAutofillService extends AutofillService {
             FillRequest request,
             CancellationSignal cancellationSignal,
             FillCallback callback) {
+
+        getSharedPreferences(DIAG, MODE_PRIVATE).edit()
+                .putInt("requests", getSharedPreferences(DIAG, MODE_PRIVATE).getInt("requests", 0) + 1)
+                .apply();
 
         if (cancellationSignal.isCanceled()) {
             callback.onSuccess(null);
@@ -69,6 +74,11 @@ public class DoclixAutofillService extends AutofillService {
                 break;
             }
         }
+
+        getSharedPreferences(DIAG, MODE_PRIVATE).edit()
+                .putString("last_type", focusedType == null ? "" : focusedType)
+                .putBoolean("focused", focusedId != null)
+                .apply();
 
         if (focusedId != null) {
             // Prefer an exact field match. If Chrome does not expose enough
