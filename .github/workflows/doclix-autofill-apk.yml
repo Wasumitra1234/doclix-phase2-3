@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
 
           if grep -RInE             'BIND_ACCESSIBILITY_SERVICE|DoclixAccessibilityService|AccessibilityService|ACTION_ACCESSIBILITY_SETTINGS|ACTION_SET_TEXT'             app/src/main; then
-            echo "ERROR: Accessibility/field-injection code remains in the production source."
+            echo "ERROR: prohibited high-privilege field-assist code remains in production source."
             exit 1
           fi
 
@@ -53,7 +53,7 @@ jobs:
           test -f app/build/outputs/apk/debug/app-debug.apk
           ls -lh app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Verify APK manifest has no AccessibilityService
+      - name: Verify APK manifest has only native Autofill service
         working-directory: android/doclix-autofill
         shell: bash
         run: |
@@ -64,27 +64,37 @@ jobs:
 
           test -n "$AAPT"
 
-          "$AAPT" dump permissions "$APK" | tee /tmp/doclix-permissions.txt
+          "$AAPT" dump permissions "$APK" > /tmp/doclix-permissions.txt
           "$AAPT" dump xmltree "$APK" --file AndroidManifest.xml > /tmp/doclix-manifest.txt
 
-          if grep -q "BIND_ACCESSIBILITY_SERVICE" /tmp/doclix-permissions.txt; then
-            echo "ERROR: Accessibility permission is present in APK."
+          if grep -Fq "BIND_ACCESSIBILITY_SERVICE" /tmp/doclix-permissions.txt; then
+            echo "ERROR: Accessibility binding permission is present."
             exit 1
           fi
 
-          if grep -q "DoclixAccessibilityService" /tmp/doclix-manifest.txt; then
-            echo "ERROR: Accessibility service is present in APK manifest."
+          if grep -Fq "DoclixAccessibilityService" /tmp/doclix-manifest.txt; then
+            echo "ERROR: Doclix field-assist service is present."
             exit 1
           fi
 
-          if grep -q "android.accessibilityservice.AccessibilityService" /tmp/doclix-manifest.txt; then
-            echo "ERROR: Accessibility service declaration is present in APK manifest."
+          if grep -Fq "android.accessibilityservice.AccessibilityService" /tmp/doclix-manifest.txt; then
+            echo "ERROR: Accessibility service component is present."
             exit 1
           fi
 
-          echo "Security gate passed: no AccessibilityService declaration detected."
+          if ! grep -Fq "BIND_AUTOFILL_SERVICE" /tmp/doclix-permissions.txt; then
+            echo "ERROR: Native Autofill binding permission is missing."
+            exit 1
+          fi
 
-      - name: Verify APK bytecode has no Doclix Accessibility class
+          if ! grep -Fq "com.doclix.autofill.DoclixAutofillService" /tmp/doclix-manifest.txt; then
+            echo "ERROR: Doclix native Autofill service is missing."
+            exit 1
+          fi
+
+          echo "Manifest security gate passed."
+
+      - name: Verify APK bytecode has no field-assist class
         working-directory: android/doclix-autofill
         shell: bash
         run: |
@@ -93,11 +103,11 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
           if unzip -l "$APK" | grep -q "DoclixAccessibilityService"; then
-            echo "ERROR: DoclixAccessibilityService class is packaged in APK."
+            echo "ERROR: field-assist class is packaged in APK."
             exit 1
           fi
 
-          echo "Security gate passed: no DoclixAccessibilityService class packaged."
+          echo "Bytecode/package gate passed."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
