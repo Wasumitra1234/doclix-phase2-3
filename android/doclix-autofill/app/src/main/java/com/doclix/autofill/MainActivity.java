@@ -12,8 +12,10 @@ import android.widget.TextView;
 
 public class MainActivity extends Activity {
     private static final String PREFS = "doclix_data_card";
+    private static final String DIAG = "doclix_autofill_diag";
     private SharedPreferences prefs;
     private TextView status;
+    private TextView diagnostic;
 
     private EditText firstName;
     private EditText middleName;
@@ -31,6 +33,7 @@ public class MainActivity extends Activity {
 
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         status = findViewById(R.id.status);
+        diagnostic = findViewById(R.id.diagnostic);
 
         firstName = findViewById(R.id.first_name);
         middleName = findViewById(R.id.middle_name);
@@ -54,6 +57,7 @@ public class MainActivity extends Activity {
         });
 
         updateStatus();
+        updateDiagnostic();
     }
 
     @Override
@@ -86,6 +90,16 @@ public class MainActivity extends Activity {
                 .apply();
 
         status.setText(R.string.data_card_saved);
+    }
+
+    private void updateDiagnostic() {
+        SharedPreferences d = getSharedPreferences(DIAG, MODE_PRIVATE);
+        int requests = d.getInt("requests", 0);
+        String type = d.getString("last_type", "");
+        boolean focused = d.getBoolean("focused", false);
+        diagnostic.setText("Autofill diagnostics\nRequests received: " + requests
+                + "\nLast focused field: " + (focused ? "YES" : "NO")
+                + "\nLast detected type: " + (type.isEmpty() ? "unknown" : type));
     }
 
     private void updateStatus() {
