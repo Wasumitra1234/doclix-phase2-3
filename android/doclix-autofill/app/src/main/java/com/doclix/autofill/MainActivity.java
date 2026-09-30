@@ -50,6 +50,12 @@ public class MainActivity extends Activity {
         save.setOnClickListener(v -> saveDataCard());
 
         Button enable = findViewById(R.id.enable);
+        Button assist = findViewById(R.id.enable_assist);
+        assist.setOnClickListener(v -> {
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivity(intent);
+        });
+
         enable.setOnClickListener(v -> {
             Intent intent = new Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE);
             intent.setData(Uri.parse("package:" + getPackageName()));
@@ -97,9 +103,17 @@ public class MainActivity extends Activity {
         int requests = d.getInt("requests", 0);
         String type = d.getString("last_type", "");
         boolean focused = d.getBoolean("focused", false);
-        diagnostic.setText("Autofill diagnostics\nRequests received: " + requests
-                + "\nLast focused field: " + (focused ? "YES" : "NO")
-                + "\nLast detected type: " + (type.isEmpty() ? "unknown" : type));
+        int fills = d.getInt("accessibility_fills", 0);
+        boolean a11y = d.getBoolean("accessibility_enabled", false);
+        String at = d.getString("accessibility_last_type", "");
+        boolean ar = d.getBoolean("accessibility_last_result", false);
+        diagnostic.setText("Doclix status\nAutofill requests: " + requests
+                + "\nAutofill focused: " + (focused ? "YES" : "NO")
+                + "\nAutofill type: " + (type.isEmpty() ? "unknown" : type)
+                + "\nField Assist: " + (a11y ? "ON" : "OFF")
+                + "\nField Assist fills: " + fills
+                + "\nLast Assist field: " + (at.isEmpty() ? "none" : at)
+                + "\nLast Assist result: " + (ar ? "FILLED" : "—"));
     }
 
     private void updateStatus() {
