@@ -28,13 +28,13 @@ public class DoclixAutofillService extends AutofillService {
     public void onFillRequest(FillRequest request, CancellationSignal cancellationSignal, FillCallback callback) {
         if (cancellationSignal.isCanceled()) return;
 
-        FillContext[] contexts = request.getFillContexts();
-        if (contexts == null || contexts.length == 0) {
+        List<FillContext> contexts = request.getFillContexts();
+        if (contexts == null || contexts.isEmpty()) {
             callback.onSuccess(null);
             return;
         }
 
-        AssistStructure structure = contexts[contexts.length - 1].getStructure();
+        AssistStructure structure = contexts.get(contexts.size() - 1).getStructure();
         List<AutofillId> nameIds = new ArrayList<>();
         List<AutofillId> emailIds = new ArrayList<>();
         List<AutofillId> mobileIds = new ArrayList<>();
