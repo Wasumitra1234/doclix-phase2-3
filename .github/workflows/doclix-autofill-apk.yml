@@ -82,8 +82,8 @@ jobs:
             exit 1
           fi
 
-          if ! grep -Fq "BIND_AUTOFILL_SERVICE" /tmp/doclix-permissions.txt; then
-            echo "ERROR: Native Autofill binding permission is missing."
+          if ! grep -Fq "android.permission.BIND_AUTOFILL_SERVICE" /tmp/doclix-manifest.txt; then
+            echo "ERROR: Native Autofill binding permission is missing from service declaration."
             exit 1
           fi
 
