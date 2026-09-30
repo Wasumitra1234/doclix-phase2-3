@@ -1,16 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Doclix">
-        <activity android:name=".MainActivity" android:exported="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <service
             android:name=".DoclixAutofillService"
             android:exported="true"
@@ -21,19 +26,8 @@
             </intent-filter>
             <meta-data
                 android:name="android.autofill"
-                android:resource="@xml/autofill_service" />
+                android:resource="@xml/autofill_service_config" />
         </service>
-        <service
-            android:name=".DoclixAccessibilityService"
-            android:exported="false"
-            android:label="Doclix Field Assist"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/doclix_accessibility_service" />
-        </service>
+
     </application>
 </manifest>
