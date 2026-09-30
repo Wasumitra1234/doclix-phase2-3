@@ -30,6 +30,10 @@ public class DoclixAutofillService extends AutofillService {
     private static final String PREFS = "doclix_data_card";
     private static final String DIAG = "doclix_autofill_diag";
 
+    // Native Autofill remains the primary path. The accessibility fallback is
+    // implemented in DoclixAccessibilityService for Chrome pages that do not
+    // expose an Android Autofill request.
+
     private String value(String key) {
         return getSharedPreferences(PREFS, MODE_PRIVATE)
                 .getString(key, "");
