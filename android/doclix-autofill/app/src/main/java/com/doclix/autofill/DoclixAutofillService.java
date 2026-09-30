@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.app.assist.AssistStructure;
 import android.app.slice.Slice;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.CancellationSignal;
 import android.service.autofill.AutofillService;
@@ -26,12 +27,12 @@ import java.util.List;
 import java.util.Locale;
 
 public class DoclixAutofillService extends AutofillService {
-    // Safe POC values only. Later these will come from the Doclix Data Card.
-    private static final String TEST_NAME = "Test Student";
-    private static final String TEST_EMAIL = "test@example.com";
-    private static final String TEST_MOBILE = "0000000000";
-    private static final String TEST_DOB = "01/01/2000";
-    private static final String TEST_CATEGORY = "SC";
+    private static final String PREFS = "doclix_data_card";
+
+    private String value(String key) {
+        return getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(key, "");
+    }
 
     @Override
     public void onFillRequest(
@@ -53,23 +54,14 @@ public class DoclixAutofillService extends AutofillService {
         AssistStructure structure =
                 contexts.get(contexts.size() - 1).getStructure();
 
-        List<AutofillId> nameIds = new ArrayList<>();
-        List<AutofillId> emailIds = new ArrayList<>();
-        List<AutofillId> mobileIds = new ArrayList<>();
-        List<AutofillId> dobIds = new ArrayList<>();
-        List<AutofillId> categoryIds = new ArrayList<>();
-
+        FieldIds fields = new FieldIds();
         AutofillId focusedId = null;
         String focusedType = "";
 
         for (int i = 0; i < structure.getWindowNodeCount(); i++) {
             FocusResult result = walkNode(
                     structure.getWindowNodeAt(i).getRootViewNode(),
-                    nameIds,
-                    emailIds,
-                    mobileIds,
-                    dobIds,
-                    categoryIds);
+                    fields);
 
             if (result.focusedId != null) {
                 focusedId = result.focusedId;
@@ -79,9 +71,16 @@ public class DoclixAutofillService extends AutofillService {
         }
 
         if (focusedId != null) {
-            String value = valueForType(focusedType);
+            String autofillValue = valueForType(focusedType);
+
+            if (autofillValue.isEmpty()) {
+                callback.onSuccess(null);
+                return;
+            }
+
             Dataset.Builder dataset = new Dataset.Builder();
-            RemoteViews menuPresentation = createPresentation(value);
+            RemoteViews menuPresentation =
+                    createPresentation(labelForType(focusedType), autofillValue);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 InlineSuggestionsRequest inlineRequest =
@@ -95,23 +94,23 @@ public class DoclixAutofillService extends AutofillService {
                             inlineRequest.getInlinePresentationSpecs().get(0);
 
                     InlinePresentation inlinePresentation =
-                            createInlinePresentation(value, spec);
+                            createInlinePresentation(autofillValue, spec);
 
                     dataset.setValue(
                             focusedId,
-                            AutofillValue.forText(value),
+                            AutofillValue.forText(autofillValue),
                             menuPresentation,
                             inlinePresentation);
                 } else {
                     dataset.setValue(
                             focusedId,
-                            AutofillValue.forText(value),
+                            AutofillValue.forText(autofillValue),
                             menuPresentation);
                 }
             } else {
                 dataset.setValue(
                         focusedId,
-                        AutofillValue.forText(value),
+                        AutofillValue.forText(autofillValue),
                         menuPresentation);
             }
 
@@ -122,15 +121,17 @@ public class DoclixAutofillService extends AutofillService {
             return;
         }
 
-        // Fallback for pages that expose matching fields but no focused node.
         FillResponse.Builder response = new FillResponse.Builder();
         boolean added = false;
 
-        added |= addDataset(response, nameIds, TEST_NAME);
-        added |= addDataset(response, emailIds, TEST_EMAIL);
-        added |= addDataset(response, mobileIds, TEST_MOBILE);
-        added |= addDataset(response, dobIds, TEST_DOB);
-        added |= addDataset(response, categoryIds, TEST_CATEGORY);
+        added |= addDataset(response, fields.firstName, value("first_name"), "First Name");
+        added |= addDataset(response, fields.middleName, value("middle_name"), "Middle Name");
+        added |= addDataset(response, fields.lastName, value("last_name"), "Last Name");
+        added |= addDataset(response, fields.fullName, value("full_name"), "Full Name");
+        added |= addDataset(response, fields.email, value("email"), "Email");
+        added |= addDataset(response, fields.mobile, value("mobile"), "Mobile");
+        added |= addDataset(response, fields.dob, value("dob"), "Date of Birth");
+        added |= addDataset(response, fields.category, value("category"), "Category");
 
         callback.onSuccess(added ? response.build() : null);
     }
@@ -138,27 +139,28 @@ public class DoclixAutofillService extends AutofillService {
     private boolean addDataset(
             FillResponse.Builder response,
             List<AutofillId> ids,
-            String value) {
+            String value,
+            String label) {
 
-        if (ids.isEmpty()) {
+        if (ids.isEmpty() || value == null || value.isEmpty()) {
             return false;
         }
 
         Dataset.Builder dataset = new Dataset.Builder();
-        RemoteViews menuPresentation = createPresentation(value);
+        RemoteViews presentation = createPresentation(label, value);
 
         for (AutofillId id : ids) {
             dataset.setValue(
                     id,
                     AutofillValue.forText(value),
-                    menuPresentation);
+                    presentation);
         }
 
         response.addDataset(dataset.build());
         return true;
     }
 
-    private RemoteViews createPresentation(String value) {
+    private RemoteViews createPresentation(String label, String value) {
         RemoteViews presentation =
                 new RemoteViews(
                         getPackageName(),
@@ -166,7 +168,7 @@ public class DoclixAutofillService extends AutofillService {
 
         presentation.setTextViewText(
                 android.R.id.text1,
-                "Doclix • " + value);
+                "Doclix • " + label + ": " + value);
 
         return presentation;
     }
@@ -188,8 +190,7 @@ public class DoclixAutofillService extends AutofillService {
                 .newContentBuilder(attribution)
                 .setTitle("Doclix")
                 .setSubtitle(value)
-                .setContentDescription(
-                        "Doclix Autofill: " + value)
+                .setContentDescription("Doclix Autofill: " + value)
                 .build()
                 .getSlice();
 
@@ -198,26 +199,53 @@ public class DoclixAutofillService extends AutofillService {
 
     private String valueForType(String type) {
         switch (type) {
+            case "first_name":
+                return value("first_name");
+            case "middle_name":
+                return value("middle_name");
+            case "last_name":
+                return value("last_name");
+            case "full_name":
+                return value("full_name");
             case "email":
-                return TEST_EMAIL;
+                return value("email");
             case "mobile":
-                return TEST_MOBILE;
+                return value("mobile");
             case "dob":
-                return TEST_DOB;
+                return value("dob");
             case "category":
-                return TEST_CATEGORY;
+                return value("category");
             default:
-                return TEST_NAME;
+                return "";
+        }
+    }
+
+    private String labelForType(String type) {
+        switch (type) {
+            case "first_name":
+                return "First Name";
+            case "middle_name":
+                return "Middle Name";
+            case "last_name":
+                return "Last Name";
+            case "full_name":
+                return "Full Name";
+            case "email":
+                return "Email";
+            case "mobile":
+                return "Mobile";
+            case "dob":
+                return "Date of Birth";
+            case "category":
+                return "Category";
+            default:
+                return "Field";
         }
     }
 
     private FocusResult walkNode(
             AssistStructure.ViewNode node,
-            List<AutofillId> nameIds,
-            List<AutofillId> emailIds,
-            List<AutofillId> mobileIds,
-            List<AutofillId> dobIds,
-            List<AutofillId> categoryIds) {
+            FieldIds fields) {
 
         if (node == null) {
             return new FocusResult(null, "");
@@ -227,16 +255,31 @@ public class DoclixAutofillService extends AutofillService {
         String type = classify(node);
 
         if (id != null) {
-            if ("email".equals(type)) {
-                emailIds.add(id);
-            } else if ("mobile".equals(type)) {
-                mobileIds.add(id);
-            } else if ("dob".equals(type)) {
-                dobIds.add(id);
-            } else if ("category".equals(type)) {
-                categoryIds.add(id);
-            } else if ("name".equals(type)) {
-                nameIds.add(id);
+            switch (type) {
+                case "first_name":
+                    fields.firstName.add(id);
+                    break;
+                case "middle_name":
+                    fields.middleName.add(id);
+                    break;
+                case "last_name":
+                    fields.lastName.add(id);
+                    break;
+                case "full_name":
+                    fields.fullName.add(id);
+                    break;
+                case "email":
+                    fields.email.add(id);
+                    break;
+                case "mobile":
+                    fields.mobile.add(id);
+                    break;
+                case "dob":
+                    fields.dob.add(id);
+                    break;
+                case "category":
+                    fields.category.add(id);
+                    break;
             }
         }
 
@@ -245,14 +288,7 @@ public class DoclixAutofillService extends AutofillService {
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
-            FocusResult child = walkNode(
-                    node.getChildAt(i),
-                    nameIds,
-                    emailIds,
-                    mobileIds,
-                    dobIds,
-                    categoryIds);
-
+            FocusResult child = walkNode(node.getChildAt(i), fields);
             if (child.focusedId != null) {
                 return child;
             }
@@ -265,17 +301,9 @@ public class DoclixAutofillService extends AutofillService {
         String[] hints = node.getAutofillHints();
         String hint = hints == null ? "" : String.join(" ", hints);
 
-        String res = node.getIdEntry() == null
-                ? ""
-                : node.getIdEntry();
-
-        String text = node.getText() == null
-                ? ""
-                : node.getText().toString();
-
-        String placeholder = node.getHint() == null
-                ? ""
-                : node.getHint().toString();
+        String res = node.getIdEntry() == null ? "" : node.getIdEntry();
+        String text = node.getText() == null ? "" : node.getText().toString();
+        String placeholder = node.getHint() == null ? "" : node.getHint().toString();
 
         String all = (hint + " " + res + " " + text + " " + placeholder)
                 .toLowerCase(Locale.ROOT);
@@ -300,13 +328,39 @@ public class DoclixAutofillService extends AutofillService {
             return "category";
         }
 
-        if (all.contains("name")
-                || all.contains("candidate")
-                || all.contains("student")) {
-            return "name";
+        if (all.contains("full name")
+                || all.contains("fullname")) {
+            return "full_name";
         }
 
-        return "name";
+        if (all.contains("middle name")
+                || all.contains("middlename")) {
+            return "middle_name";
+        }
+
+        if (all.contains("first name")
+                || all.contains("firstname")) {
+            return "first_name";
+        }
+
+        if (all.contains("last name")
+                || all.contains("lastname")
+                || all.contains("surname")) {
+            return "last_name";
+        }
+
+        return "";
+    }
+
+    private static final class FieldIds {
+        final List<AutofillId> firstName = new ArrayList<>();
+        final List<AutofillId> middleName = new ArrayList<>();
+        final List<AutofillId> lastName = new ArrayList<>();
+        final List<AutofillId> fullName = new ArrayList<>();
+        final List<AutofillId> email = new ArrayList<>();
+        final List<AutofillId> mobile = new ArrayList<>();
+        final List<AutofillId> dob = new ArrayList<>();
+        final List<AutofillId> category = new ArrayList<>();
     }
 
     private static final class FocusResult {
