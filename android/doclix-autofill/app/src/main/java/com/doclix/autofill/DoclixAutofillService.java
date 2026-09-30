@@ -1,6 +1,10 @@
 package com.doclix.autofill;
 
+import android.app.PendingIntent;
 import android.app.assist.AssistStructure;
+import android.app.slice.Slice;
+import android.content.Intent;
+import android.os.Build;
 import android.os.CancellationSignal;
 import android.service.autofill.AutofillService;
 import android.service.autofill.Dataset;
@@ -8,18 +12,21 @@ import android.service.autofill.FillCallback;
 import android.service.autofill.FillContext;
 import android.service.autofill.FillRequest;
 import android.service.autofill.FillResponse;
-import android.service.autofill.SaveCallback;
-import android.service.autofill.SaveRequest;
+import android.service.autofill.InlinePresentation;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
+import android.view.inputmethod.InlineSuggestionsRequest;
 import android.widget.RemoteViews;
+import android.widget.inline.InlinePresentationSpec;
+
+import androidx.autofill.inline.v1.InlineSuggestionUi;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 public class DoclixAutofillService extends AutofillService {
-    // Safe POC values only. These will later come from the Doclix Data Card.
+    // Safe POC values only. Later these will come from the Doclix Data Card.
     private static final String TEST_NAME = "Test Student";
     private static final String TEST_EMAIL = "test@example.com";
     private static final String TEST_MOBILE = "0000000000";
@@ -71,23 +78,42 @@ public class DoclixAutofillService extends AutofillService {
             }
         }
 
-        /*
-         * Chrome often exposes a focused HTML input without reliable
-         * autofill hints. The focused-field dataset is therefore the
-         * primary POC path.
-         *
-         * IMPORTANT: supply a visible presentation. Android's Dataset
-         * documentation states that a dataset intended to be shown to
-         * the user needs a presentation; without one the autofill UI
-         * may not be displayed.
-         */
         if (focusedId != null) {
             String value = valueForType(focusedType);
             Dataset.Builder dataset = new Dataset.Builder();
-            dataset.setValue(
-                    focusedId,
-                    AutofillValue.forText(value),
-                    createPresentation(value));
+            RemoteViews menuPresentation = createPresentation(value);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                InlineSuggestionsRequest inlineRequest =
+                        request.getInlineSuggestionsRequest();
+
+                if (inlineRequest != null
+                        && inlineRequest.getMaxSuggestionCount() > 0
+                        && !inlineRequest.getInlinePresentationSpecs().isEmpty()) {
+
+                    InlinePresentationSpec spec =
+                            inlineRequest.getInlinePresentationSpecs().get(0);
+
+                    InlinePresentation inlinePresentation =
+                            createInlinePresentation(value, spec);
+
+                    dataset.setValue(
+                            focusedId,
+                            AutofillValue.forText(value),
+                            menuPresentation,
+                            inlinePresentation);
+                } else {
+                    dataset.setValue(
+                            focusedId,
+                            AutofillValue.forText(value),
+                            menuPresentation);
+                }
+            } else {
+                dataset.setValue(
+                        focusedId,
+                        AutofillValue.forText(value),
+                        menuPresentation);
+            }
 
             callback.onSuccess(
                     new FillResponse.Builder()
@@ -96,10 +122,7 @@ public class DoclixAutofillService extends AutofillService {
             return;
         }
 
-        /*
-         * Fallback for pages that do not report a focused node. Only return
-         * datasets when matching fields were actually detected.
-         */
+        // Fallback for pages that expose matching fields but no focused node.
         FillResponse.Builder response = new FillResponse.Builder();
         boolean added = false;
 
@@ -122,12 +145,13 @@ public class DoclixAutofillService extends AutofillService {
         }
 
         Dataset.Builder dataset = new Dataset.Builder();
+        RemoteViews menuPresentation = createPresentation(value);
 
         for (AutofillId id : ids) {
             dataset.setValue(
                     id,
                     AutofillValue.forText(value),
-                    createPresentation(value));
+                    menuPresentation);
         }
 
         response.addDataset(dataset.build());
@@ -136,13 +160,40 @@ public class DoclixAutofillService extends AutofillService {
 
     private RemoteViews createPresentation(String value) {
         RemoteViews presentation =
-                new RemoteViews(getPackageName(), android.R.layout.simple_list_item_1);
+                new RemoteViews(
+                        getPackageName(),
+                        android.R.layout.simple_list_item_1);
 
         presentation.setTextViewText(
                 android.R.id.text1,
                 "Doclix • " + value);
 
         return presentation;
+    }
+
+    private InlinePresentation createInlinePresentation(
+            String value,
+            InlinePresentationSpec spec) {
+
+        Intent intent = new Intent(this, MainActivity.class);
+
+        PendingIntent attribution = PendingIntent.getActivity(
+                this,
+                Math.abs(value.hashCode()),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT
+                        | PendingIntent.FLAG_IMMUTABLE);
+
+        Slice slice = InlineSuggestionUi
+                .newContentBuilder(attribution)
+                .setTitle("Doclix")
+                .setSubtitle(value)
+                .setContentDescription(
+                        "Doclix Autofill: " + value)
+                .build()
+                .getSlice();
+
+        return new InlinePresentation(slice, spec, false);
     }
 
     private String valueForType(String type) {
@@ -270,8 +321,8 @@ public class DoclixAutofillService extends AutofillService {
 
     @Override
     public void onSaveRequest(
-            SaveRequest request,
-            SaveCallback callback) {
+            android.service.autofill.SaveRequest request,
+            android.service.autofill.SaveCallback callback) {
         callback.onSuccess();
     }
 }
