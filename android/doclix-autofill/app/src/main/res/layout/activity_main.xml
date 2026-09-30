@@ -95,6 +95,13 @@
             android:text="@string/save_data_card" />
 
         <Button
+            android:id="@+id/enable_assist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="ENABLE DOCLIX FIELD ASSIST" />
+
+        <Button
             android:id="@+id/enable"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
