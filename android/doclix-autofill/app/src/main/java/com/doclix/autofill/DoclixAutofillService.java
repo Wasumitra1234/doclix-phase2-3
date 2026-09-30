@@ -2,7 +2,6 @@ package com.doclix.autofill;
 
 import android.app.assist.AssistStructure;
 import android.os.CancellationSignal;
-import android.service.autofill.AutofillId;
 import android.service.autofill.AutofillService;
 import android.service.autofill.Dataset;
 import android.service.autofill.FillCallback;
@@ -11,6 +10,7 @@ import android.service.autofill.FillRequest;
 import android.service.autofill.FillResponse;
 import android.service.autofill.SaveCallback;
 import android.service.autofill.SaveRequest;
+import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
 
 import java.util.ArrayList;
@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Locale;
 
 public class DoclixAutofillService extends AutofillService {
-    // POC placeholders only. Production values must come from Doclix's validated Data Card.
     private static final String TEST_NAME = "Test Student";
     private static final String TEST_EMAIL = "test@example.com";
     private static final String TEST_MOBILE = "0000000000";
