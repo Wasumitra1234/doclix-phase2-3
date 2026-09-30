@@ -42,6 +42,29 @@ jobs:
 
           test ! -f app/src/main/res/xml/doclix_accessibility_service.xml
 
+      - name: Production privilege pre-build gate
+        working-directory: android/doclix-autofill
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          test -f "$MANIFEST"
+
+          if grep -nEi 'AccessibilityService|BIND_ACCESSIBILITY_SERVICE|android.accessibilityservice.AccessibilityService' "$MANIFEST"; then
+            echo "ERROR: prohibited AccessibilityService declaration found in AndroidManifest.xml."
+            exit 1
+          fi
+
+          if grep -RInE 'BIND_ACCESSIBILITY_SERVICE|DoclixAccessibilityService|AccessibilityService|ACTION_ACCESSIBILITY_SETTINGS|ACTION_SET_TEXT' app/src/main; then
+            echo "ERROR: prohibited Accessibility field-assist reference found in production source."
+            exit 1
+          fi
+
+          test ! -f app/src/main/res/xml/doclix_accessibility_service.xml
+
+          echo "Production privilege gate passed: native Autofill only."
+
       - name: Run field-mapping unit tests
         working-directory: android/doclix-autofill
         run: gradle :app:testDebugUnitTest --no-daemon
