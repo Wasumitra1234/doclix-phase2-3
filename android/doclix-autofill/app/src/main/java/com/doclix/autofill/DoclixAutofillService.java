@@ -23,7 +23,6 @@ import androidx.autofill.inline.v1.InlineSuggestionUi;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public class DoclixAutofillService extends AutofillService {
 
@@ -54,7 +53,6 @@ public class DoclixAutofillService extends AutofillService {
         }
 
         List<FillContext> contexts = request.getFillContexts();
-
         if (contexts == null || contexts.isEmpty()) {
             callback.onSuccess(null);
             return;
@@ -64,144 +62,86 @@ public class DoclixAutofillService extends AutofillService {
                 contexts.get(contexts.size() - 1).getStructure();
 
         FieldIds fields = new FieldIds();
-        FocusResult focused = null;
+        List<FocusResult> focusedCandidates = new ArrayList<>();
 
         for (int i = 0; i < structure.getWindowNodeCount(); i++) {
-            FocusResult result = walkNode(
+            walkNode(
                     structure.getWindowNodeAt(i).getRootViewNode(),
-                    fields);
-
-            if (result.focusedId != null) {
-                focused = result;
-                break;
-            }
+                    fields,
+                    focusedCandidates,
+                    0);
         }
 
-        String focusedType =
-                focused == null ? "" : focused.type;
+        // Chrome/WebView can expose more than one node as focused during a
+        // request. Never take the first focused node blindly. Prefer a
+        // semantically classified focused node, and among those prefer the
+        // deepest node (the actual input is normally deeper than containers).
+        FocusResult focused = chooseFocused(focusedCandidates);
+        String focusedType = focused == null ? "" : focused.type;
 
         getSharedPreferences(DIAG, MODE_PRIVATE).edit()
                 .putString("last_type", focusedType)
-                .putBoolean(
-                        "focused",
-                        focused != null && focused.focusedId != null)
+                .putBoolean("focused", focused != null)
                 .apply();
 
-        /*
-         * Primary path:
-         * Android identifies the focused field and Doclix returns a dataset
-         * for that AutofillId. Doclix never inspects AccessibilityNodeInfo,
-         * active windows, or injects text into another application.
-         */
         if (focused != null && focused.focusedId != null) {
+            String data = valueForType(focusedType);
 
-            if (!focusedType.isEmpty()) {
-                String data = valueForType(focusedType);
+            if (!focusedType.isEmpty() && !data.isEmpty()) {
+                FillResponse.Builder response = new FillResponse.Builder();
 
-                if (!data.isEmpty()) {
-                    FillResponse.Builder response =
-                            new FillResponse.Builder();
+                addFocusedDataset(
+                        response,
+                        focused.focusedId,
+                        data,
+                        labelForType(focusedType),
+                        request);
 
-                    addFocusedDataset(
-                            response,
-                            focused.focusedId,
-                            data,
-                            labelForType(focusedType),
-                            request);
-
-                    callback.onSuccess(response.build());
-                    return;
-                }
+                callback.onSuccess(response.build());
+                return;
             }
 
-            /*
-             * If the browser does not expose enough semantics to classify the
-             * focused field, offer labelled values for the SAME AutofillId.
-             * The operator chooses the value instead of Doclix guessing.
-             */
-            FillResponse.Builder response =
-                    new FillResponse.Builder();
-
-            boolean added = false;
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("first_name"), "First Name", request);
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("middle_name"), "Middle Name", request);
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("last_name"), "Last Name", request);
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("full_name"), "Full Name", request);
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("email"), "Email", request);
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("mobile"), "Mobile", request);
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("dob"), "Date of Birth", request);
-
-            added |= addFocusedDataset(
-                    response, focused.focusedId,
-                    value("category"), "Category", request);
-
-            callback.onSuccess(added ? response.build() : null);
+            // Unknown/unsupported focused field: do NOT guess by returning
+            // First Name as the first suggestion. Returning null is safer.
+            callback.onSuccess(null);
             return;
         }
 
-        /*
-         * Fallback for pages exposing several semantic fields but no focused
-         * field. Each Dataset maps values only to matching AutofillIds.
-         */
-        FillResponse.Builder response =
-                new FillResponse.Builder();
-
+        // No focused field: return only deterministic field-to-ID mappings.
+        FillResponse.Builder response = new FillResponse.Builder();
         boolean added = false;
 
-        added |= addDataset(
-                response, fields.firstName,
-                value("first_name"), "First Name");
-
-        added |= addDataset(
-                response, fields.middleName,
-                value("middle_name"), "Middle Name");
-
-        added |= addDataset(
-                response, fields.lastName,
-                value("last_name"), "Last Name");
-
-        added |= addDataset(
-                response, fields.fullName,
-                value("full_name"), "Full Name");
-
-        added |= addDataset(
-                response, fields.email,
-                value("email"), "Email");
-
-        added |= addDataset(
-                response, fields.mobile,
-                value("mobile"), "Mobile");
-
-        added |= addDataset(
-                response, fields.dob,
-                value("dob"), "Date of Birth");
-
-        added |= addDataset(
-                response, fields.category,
-                value("category"), "Category");
+        added |= addDataset(response, fields.firstName, value("first_name"), "First Name");
+        added |= addDataset(response, fields.middleName, value("middle_name"), "Middle Name");
+        added |= addDataset(response, fields.lastName, value("last_name"), "Last Name");
+        added |= addDataset(response, fields.fullName, value("full_name"), "Full Name");
+        added |= addDataset(response, fields.email, value("email"), "Email");
+        added |= addDataset(response, fields.mobile, value("mobile"), "Mobile");
+        added |= addDataset(response, fields.dob, value("dob"), "Date of Birth");
+        added |= addDataset(response, fields.category, value("category"), "Category");
 
         callback.onSuccess(added ? response.build() : null);
+    }
+
+    private FocusResult chooseFocused(List<FocusResult> candidates) {
+        FocusResult bestKnown = null;
+        FocusResult bestUnknown = null;
+
+        for (FocusResult candidate : candidates) {
+            if (candidate == null || candidate.focusedId == null) {
+                continue;
+            }
+
+            if (!candidate.type.isEmpty()) {
+                if (bestKnown == null || candidate.depth > bestKnown.depth) {
+                    bestKnown = candidate;
+                }
+            } else if (bestUnknown == null || candidate.depth > bestUnknown.depth) {
+                bestUnknown = candidate;
+            }
+        }
+
+        return bestKnown != null ? bestKnown : bestUnknown;
     }
 
     private boolean addFocusedDataset(
@@ -216,25 +156,18 @@ public class DoclixAutofillService extends AutofillService {
         }
 
         Dataset.Builder dataset = new Dataset.Builder();
-
-        RemoteViews presentation =
-                createPresentation(label, data);
+        RemoteViews presentation = createPresentation(label, data);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-
             InlineSuggestionsRequest inlineRequest =
                     request.getInlineSuggestionsRequest();
 
             if (inlineRequest != null
                     && inlineRequest.getMaxSuggestionCount() > 0
-                    && !inlineRequest
-                    .getInlinePresentationSpecs()
-                    .isEmpty()) {
+                    && !inlineRequest.getInlinePresentationSpecs().isEmpty()) {
 
                 InlinePresentationSpec spec =
-                        inlineRequest
-                                .getInlinePresentationSpecs()
-                                .get(0);
+                        inlineRequest.getInlinePresentationSpecs().get(0);
 
                 InlinePresentation inlinePresentation =
                         createInlinePresentation(data, spec);
@@ -244,17 +177,13 @@ public class DoclixAutofillService extends AutofillService {
                         AutofillValue.forText(data),
                         presentation,
                         inlinePresentation);
-
             } else {
-
                 dataset.setValue(
                         id,
                         AutofillValue.forText(data),
                         presentation);
             }
-
         } else {
-
             dataset.setValue(
                     id,
                     AutofillValue.forText(data),
@@ -271,37 +200,25 @@ public class DoclixAutofillService extends AutofillService {
             String data,
             String label) {
 
-        if (ids.isEmpty()
-                || data == null
-                || data.isEmpty()) {
+        if (ids.isEmpty() || data == null || data.isEmpty()) {
             return false;
         }
 
-        Dataset.Builder dataset =
-                new Dataset.Builder();
-
-        RemoteViews presentation =
-                createPresentation(label, data);
+        Dataset.Builder dataset = new Dataset.Builder();
+        RemoteViews presentation = createPresentation(label, data);
 
         for (AutofillId id : ids) {
-            dataset.setValue(
-                    id,
-                    AutofillValue.forText(data),
-                    presentation);
+            dataset.setValue(id, AutofillValue.forText(data), presentation);
         }
 
         response.addDataset(dataset.build());
         return true;
     }
 
-    private RemoteViews createPresentation(
-            String label,
-            String data) {
-
-        RemoteViews presentation =
-                new RemoteViews(
-                        getPackageName(),
-                        android.R.layout.simple_list_item_1);
+    private RemoteViews createPresentation(String label, String data) {
+        RemoteViews presentation = new RemoteViews(
+                getPackageName(),
+                android.R.layout.simple_list_item_1);
 
         presentation.setTextViewText(
                 android.R.id.text1,
@@ -314,240 +231,147 @@ public class DoclixAutofillService extends AutofillService {
             String data,
             InlinePresentationSpec spec) {
 
-        Intent intent =
-                new Intent(this, MainActivity.class);
+        Intent intent = new Intent(this, MainActivity.class);
 
-        PendingIntent attribution =
-                PendingIntent.getActivity(
-                        this,
-                        Math.abs(data.hashCode()),
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT
-                                | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent attribution = PendingIntent.getActivity(
+                this,
+                Math.abs(data.hashCode()),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT
+                        | PendingIntent.FLAG_IMMUTABLE);
 
-        Slice slice =
-                InlineSuggestionUi
-                        .newContentBuilder(attribution)
-                        .setTitle("Doclix")
-                        .setSubtitle(data)
-                        .setContentDescription(
-                                "Doclix Autofill: " + data)
-                        .build()
-                        .getSlice();
+        Slice slice = InlineSuggestionUi
+                .newContentBuilder(attribution)
+                .setTitle("Doclix")
+                .setSubtitle(data)
+                .setContentDescription("Doclix Autofill: " + data)
+                .build()
+                .getSlice();
 
-        return new InlinePresentation(
-                slice,
-                spec,
-                false);
+        return new InlinePresentation(slice, spec, false);
     }
 
     private String valueForType(String type) {
-
         switch (type) {
-
-            case "first_name":
-                return value("first_name");
-
-            case "middle_name":
-                return value("middle_name");
-
-            case "last_name":
-                return value("last_name");
-
-            case "full_name":
-                return value("full_name");
-
-            case "email":
-                return value("email");
-
-            case "mobile":
-                return value("mobile");
-
-            case "dob":
-                return value("dob");
-
-            case "category":
-                return value("category");
-
-            default:
-                return "";
+            case "first_name": return value("first_name");
+            case "middle_name": return value("middle_name");
+            case "last_name": return value("last_name");
+            case "full_name": return value("full_name");
+            case "email": return value("email");
+            case "mobile": return value("mobile");
+            case "dob": return value("dob");
+            case "category": return value("category");
+            default: return "";
         }
     }
 
     private String labelForType(String type) {
-
         switch (type) {
-
-            case "first_name":
-                return "First Name";
-
-            case "middle_name":
-                return "Middle Name";
-
-            case "last_name":
-                return "Last Name";
-
-            case "full_name":
-                return "Full Name";
-
-            case "email":
-                return "Email";
-
-            case "mobile":
-                return "Mobile";
-
-            case "dob":
-                return "Date of Birth";
-
-            case "category":
-                return "Category";
-
-            default:
-                return "Field";
+            case "first_name": return "First Name";
+            case "middle_name": return "Middle Name";
+            case "last_name": return "Last Name";
+            case "full_name": return "Full Name";
+            case "email": return "Email";
+            case "mobile": return "Mobile";
+            case "dob": return "Date of Birth";
+            case "category": return "Category";
+            default: return "Field";
         }
     }
 
-    private FocusResult walkNode(
+    private void walkNode(
             AssistStructure.ViewNode node,
-            FieldIds fields) {
+            FieldIds fields,
+            List<FocusResult> focusedCandidates,
+            int depth) {
 
         if (node == null) {
-            return new FocusResult(null, "");
+            return;
         }
 
         AutofillId id = node.getAutofillId();
         String type = classify(node);
 
         if (id != null) {
-
             switch (type) {
-
-                case "first_name":
-                    fields.firstName.add(id);
-                    break;
-
-                case "middle_name":
-                    fields.middleName.add(id);
-                    break;
-
-                case "last_name":
-                    fields.lastName.add(id);
-                    break;
-
-                case "full_name":
-                    fields.fullName.add(id);
-                    break;
-
-                case "email":
-                    fields.email.add(id);
-                    break;
-
-                case "mobile":
-                    fields.mobile.add(id);
-                    break;
-
-                case "dob":
-                    fields.dob.add(id);
-                    break;
-
-                case "category":
-                    fields.category.add(id);
-                    break;
-
-                default:
-                    break;
+                case "first_name": fields.firstName.add(id); break;
+                case "middle_name": fields.middleName.add(id); break;
+                case "last_name": fields.lastName.add(id); break;
+                case "full_name": fields.fullName.add(id); break;
+                case "email": fields.email.add(id); break;
+                case "mobile": fields.mobile.add(id); break;
+                case "dob": fields.dob.add(id); break;
+                case "category": fields.category.add(id); break;
+                default: break;
             }
         }
 
         if (id != null && node.isFocused()) {
-            return new FocusResult(id, type);
+            focusedCandidates.add(new FocusResult(id, type, depth));
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
-
-            FocusResult child =
-                    walkNode(
-                            node.getChildAt(i),
-                            fields);
-
-            if (child.focusedId != null) {
-                return child;
-            }
+            walkNode(
+                    node.getChildAt(i),
+                    fields,
+                    focusedCandidates,
+                    depth + 1);
         }
-
-        return new FocusResult(null, "");
     }
 
-    private String classify(
-            AssistStructure.ViewNode node) {
-
+    private String classify(AssistStructure.ViewNode node) {
         String[] hints = node.getAutofillHints();
+        String hint = hints == null ? "" : String.join(" ", hints);
 
-        String hint =
-                hints == null
-                        ? ""
-                        : String.join(" ", hints);
+        String resourceId = node.getIdEntry() == null ? "" : node.getIdEntry();
+        String placeholder = node.getHint() == null ? "" : node.getHint().toString();
+        String text = node.getText() == null ? "" : node.getText().toString();
 
-        String resourceId =
-                node.getIdEntry() == null
-                        ? ""
-                        : node.getIdEntry();
+        String htmlAttributes = "";
+        AssistStructure.ViewNode.HtmlInfo htmlInfo = node.getHtmlInfo();
+        if (htmlInfo != null && htmlInfo.getAttributes() != null) {
+            StringBuilder attributes = new StringBuilder();
+            for (android.util.Pair<String, String> attribute
+                    : htmlInfo.getAttributes()) {
+                attributes.append(' ')
+                        .append(attribute.first)
+                        .append('=')
+                        .append(attribute.second);
+            }
+            htmlAttributes = attributes.toString();
+        }
 
-        String placeholder =
-                node.getHint() == null
-                        ? ""
-                        : node.getHint().toString();
-
-        String webDomain =
-                node.getWebDomain() == null
-                        ? ""
-                        : node.getWebDomain();
+        String webDomain = node.getWebDomain() == null ? "" : node.getWebDomain();
 
         return FieldClassifier.classify(
                 hint,
                 resourceId,
                 placeholder,
+                text,
+                htmlAttributes,
                 webDomain);
     }
 
     private static final class FieldIds {
-
-        final List<AutofillId> firstName =
-                new ArrayList<>();
-
-        final List<AutofillId> middleName =
-                new ArrayList<>();
-
-        final List<AutofillId> lastName =
-                new ArrayList<>();
-
-        final List<AutofillId> fullName =
-                new ArrayList<>();
-
-        final List<AutofillId> email =
-                new ArrayList<>();
-
-        final List<AutofillId> mobile =
-                new ArrayList<>();
-
-        final List<AutofillId> dob =
-                new ArrayList<>();
-
-        final List<AutofillId> category =
-                new ArrayList<>();
+        final List<AutofillId> firstName = new ArrayList<>();
+        final List<AutofillId> middleName = new ArrayList<>();
+        final List<AutofillId> lastName = new ArrayList<>();
+        final List<AutofillId> fullName = new ArrayList<>();
+        final List<AutofillId> email = new ArrayList<>();
+        final List<AutofillId> mobile = new ArrayList<>();
+        final List<AutofillId> dob = new ArrayList<>();
+        final List<AutofillId> category = new ArrayList<>();
     }
 
     private static final class FocusResult {
-
         final AutofillId focusedId;
         final String type;
+        final int depth;
 
-        FocusResult(
-                AutofillId focusedId,
-                String type) {
-
+        FocusResult(AutofillId focusedId, String type, int depth) {
             this.focusedId = focusedId;
             this.type = type;
+            this.depth = depth;
         }
     }
 
@@ -555,7 +379,6 @@ public class DoclixAutofillService extends AutofillService {
     public void onSaveRequest(
             android.service.autofill.SaveRequest request,
             android.service.autofill.SaveCallback callback) {
-
         callback.onSuccess();
     }
 }
