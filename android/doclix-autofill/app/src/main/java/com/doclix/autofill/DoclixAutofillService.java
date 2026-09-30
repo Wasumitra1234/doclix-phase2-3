@@ -35,79 +35,122 @@ public class DoclixAutofillService extends AutofillService {
         }
 
         AssistStructure structure = contexts.get(contexts.size() - 1).getStructure();
+
         List<AutofillId> nameIds = new ArrayList<>();
         List<AutofillId> emailIds = new ArrayList<>();
         List<AutofillId> mobileIds = new ArrayList<>();
         List<AutofillId> dobIds = new ArrayList<>();
         List<AutofillId> categoryIds = new ArrayList<>();
+        AutofillId focusedId = null;
+        String focusedType = "";
 
         for (int i = 0; i < structure.getWindowNodeCount(); i++) {
-            walkNode(structure.getWindowNodeAt(i).getRootViewNode(),
+            FocusResult result = walkNode(structure.getWindowNodeAt(i).getRootViewNode(),
                     nameIds, emailIds, mobileIds, dobIds, categoryIds);
+            if (result.focusedId != null) {
+                focusedId = result.focusedId;
+                focusedType = result.type;
+            }
         }
 
         FillResponse.Builder response = new FillResponse.Builder();
         boolean added = false;
 
-        if (!nameIds.isEmpty()) {
-            Dataset.Builder ds = new Dataset.Builder();
-            for (AutofillId id : nameIds) ds.setValue(id, AutofillValue.forText(TEST_NAME));
-            response.addDataset(ds.build());
+        // First provide a dataset specifically for the field currently focused.
+        // This is important for Chrome pages whose HTML fields do not expose
+        // reliable autofill hints/resource IDs.
+        if (focusedId != null) {
+            Dataset.Builder focused = new Dataset.Builder();
+            focused.setValue(focusedId, AutofillValue.forText(valueForType(focusedType)));
+            response.addDataset(focused.build());
             added = true;
         }
-        if (!emailIds.isEmpty()) {
-            Dataset.Builder ds = new Dataset.Builder();
-            for (AutofillId id : emailIds) ds.setValue(id, AutofillValue.forText(TEST_EMAIL));
-            response.addDataset(ds.build());
-            added = true;
-        }
-        if (!mobileIds.isEmpty()) {
-            Dataset.Builder ds = new Dataset.Builder();
-            for (AutofillId id : mobileIds) ds.setValue(id, AutofillValue.forText(TEST_MOBILE));
-            response.addDataset(ds.build());
-            added = true;
-        }
-        if (!dobIds.isEmpty()) {
-            Dataset.Builder ds = new Dataset.Builder();
-            for (AutofillId id : dobIds) ds.setValue(id, AutofillValue.forText(TEST_DOB));
-            response.addDataset(ds.build());
-            added = true;
-        }
-        if (!categoryIds.isEmpty()) {
-            Dataset.Builder ds = new Dataset.Builder();
-            for (AutofillId id : categoryIds) ds.setValue(id, AutofillValue.forText(TEST_CATEGORY));
-            response.addDataset(ds.build());
-            added = true;
-        }
+
+        added |= addDataset(response, nameIds, TEST_NAME);
+        added |= addDataset(response, emailIds, TEST_EMAIL);
+        added |= addDataset(response, mobileIds, TEST_MOBILE);
+        added |= addDataset(response, dobIds, TEST_DOB);
+        added |= addDataset(response, categoryIds, TEST_CATEGORY);
 
         callback.onSuccess(added ? response.build() : null);
     }
 
-    private void walkNode(AssistStructure.ViewNode node,
-                          List<AutofillId> nameIds,
-                          List<AutofillId> emailIds,
-                          List<AutofillId> mobileIds,
-                          List<AutofillId> dobIds,
-                          List<AutofillId> categoryIds) {
-        if (node == null) return;
+    private boolean addDataset(FillResponse.Builder response, List<AutofillId> ids, String value) {
+        if (ids.isEmpty()) return false;
+        Dataset.Builder ds = new Dataset.Builder();
+        for (AutofillId id : ids) {
+            ds.setValue(id, AutofillValue.forText(value));
+        }
+        response.addDataset(ds.build());
+        return true;
+    }
+
+    private String valueForType(String type) {
+        switch (type) {
+            case "email": return TEST_EMAIL;
+            case "mobile": return TEST_MOBILE;
+            case "dob": return TEST_DOB;
+            case "category": return TEST_CATEGORY;
+            default: return TEST_NAME;
+        }
+    }
+
+    private FocusResult walkNode(AssistStructure.ViewNode node,
+                                 List<AutofillId> nameIds,
+                                 List<AutofillId> emailIds,
+                                 List<AutofillId> mobileIds,
+                                 List<AutofillId> dobIds,
+                                 List<AutofillId> categoryIds) {
+        if (node == null) return new FocusResult(null, "");
 
         AutofillId id = node.getAutofillId();
-        if (id != null) {
-            String[] hints = node.getAutofillHints();
-            String hint = hints == null ? "" : String.join(" ", hints);
-            String res = node.getIdEntry() == null ? "" : node.getIdEntry();
-            String text = node.getText() == null ? "" : node.getText().toString();
-            String all = (hint + " " + res + " " + text).toLowerCase(Locale.ROOT);
+        String type = classify(node);
 
-            if (all.contains("email")) emailIds.add(id);
-            else if (all.contains("phone") || all.contains("mobile") || all.contains("tel")) mobileIds.add(id);
-            else if (all.contains("birth") || all.contains("dob")) dobIds.add(id);
-            else if (all.contains("category") || all.contains("caste")) categoryIds.add(id);
-            else if (all.contains("name") || all.contains("candidate") || all.contains("student")) nameIds.add(id);
+        if (id != null) {
+            if ("email".equals(type)) emailIds.add(id);
+            else if ("mobile".equals(type)) mobileIds.add(id);
+            else if ("dob".equals(type)) dobIds.add(id);
+            else if ("category".equals(type)) categoryIds.add(id);
+            else if ("name".equals(type)) nameIds.add(id);
+        }
+
+        if (id != null && node.isFocused()) {
+            return new FocusResult(id, type);
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
-            walkNode(node.getChildAt(i), nameIds, emailIds, mobileIds, dobIds, categoryIds);
+            FocusResult child = walkNode(node.getChildAt(i), nameIds, emailIds, mobileIds, dobIds, categoryIds);
+            if (child.focusedId != null) return child;
+        }
+
+        return new FocusResult(null, "");
+    }
+
+    private String classify(AssistStructure.ViewNode node) {
+        String[] hints = node.getAutofillHints();
+        String hint = hints == null ? "" : String.join(" ", hints);
+        String res = node.getIdEntry() == null ? "" : node.getIdEntry();
+        String text = node.getText() == null ? "" : node.getText().toString();
+        String placeholder = node.getHint() == null ? "" : node.getHint().toString();
+
+        String all = (hint + " " + res + " " + text + " " + placeholder)
+                .toLowerCase(Locale.ROOT);
+
+        if (all.contains("email")) return "email";
+        if (all.contains("phone") || all.contains("mobile") || all.contains("tel")) return "mobile";
+        if (all.contains("birth") || all.contains("dob")) return "dob";
+        if (all.contains("category") || all.contains("caste")) return "category";
+        if (all.contains("name") || all.contains("candidate") || all.contains("student")) return "name";
+        return "name";
+    }
+
+    private static final class FocusResult {
+        final AutofillId focusedId;
+        final String type;
+
+        FocusResult(AutofillId focusedId, String type) {
+            this.focusedId = focusedId;
+            this.type = type;
         }
     }
 
