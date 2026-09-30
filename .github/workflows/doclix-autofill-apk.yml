@@ -42,6 +42,10 @@ jobs:
 
           test ! -f app/src/main/res/xml/doclix_accessibility_service.xml
 
+      - name: Run field-mapping unit tests
+        working-directory: android/doclix-autofill
+        run: gradle :app:testDebugUnitTest --no-daemon
+
       - name: Build debug APK
         working-directory: android/doclix-autofill
         run: gradle :app:assembleDebug --no-daemon
