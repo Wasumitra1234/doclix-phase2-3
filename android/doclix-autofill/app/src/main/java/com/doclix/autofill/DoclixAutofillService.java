@@ -344,6 +344,27 @@ public class DoclixAutofillService extends AutofillService {
                 inputType);
     }
 
+    static String classifyMetadataForTest(
+            String[] autofillHints,
+            String resourceId,
+            String placeholder,
+            String contentDescription,
+            String htmlAttributes,
+            int inputType) {
+
+        String hints = autofillHints == null
+                ? ""
+                : String.join(" ", autofillHints);
+
+        return FieldClassifier.classify(
+                hints,
+                resourceId,
+                placeholder,
+                contentDescription,
+                htmlAttributes,
+                inputType);
+    }
+
     private String classify(AssistStructure.ViewNode node) {
         String[] hints = node.getAutofillHints();
 
@@ -355,11 +376,13 @@ public class DoclixAutofillService extends AutofillService {
                 ? ""
                 : node.getHint();
 
-        String contentDescription = node.getContentDescription() == null
-                ? ""
-                : node.getContentDescription().toString();
+        String contentDescription =
+                node.getContentDescription() == null
+                        ? ""
+                        : node.getContentDescription().toString();
 
-        String htmlAttributes = htmlAttributes(node.getHtmlInfo());
+        String htmlAttributes =
+                extractHtmlAttributes(node.getHtmlInfo());
 
         return FieldClassifier.classify(
                 hints == null ? "" : String.join(" ", hints),
@@ -370,19 +393,23 @@ public class DoclixAutofillService extends AutofillService {
                 node.getInputType());
     }
 
-    private static String htmlAttributes(ViewStructure.HtmlInfo htmlInfo) {
+    private static String extractHtmlAttributes(
+            ViewStructure.HtmlInfo htmlInfo) {
+
         if (htmlInfo == null) {
             return "";
         }
 
-        StringBuilder out = new StringBuilder();
+        StringBuilder result = new StringBuilder();
 
         String tag = htmlInfo.getTag();
         if (tag != null && !tag.isEmpty()) {
-            out.append("tag=").append(tag).append(' ');
+            result.append("tag=").append(tag).append(' ');
         }
 
-        List<Pair<String, String>> attributes = htmlInfo.getAttributes();
+        List<Pair<String, String>> attributes =
+                htmlInfo.getAttributes();
+
         if (attributes != null) {
             for (Pair<String, String> attribute : attributes) {
                 if (attribute == null) {
@@ -390,18 +417,18 @@ public class DoclixAutofillService extends AutofillService {
                 }
 
                 if (attribute.first != null) {
-                    out.append(attribute.first);
+                    result.append(attribute.first);
                 }
 
                 if (attribute.second != null) {
-                    out.append('=').append(attribute.second);
+                    result.append('=').append(attribute.second);
                 }
 
-                out.append(' ');
+                result.append(' ');
             }
         }
 
-        return out.toString();
+        return result.toString();
     }
 
     private static final class FieldIds {
