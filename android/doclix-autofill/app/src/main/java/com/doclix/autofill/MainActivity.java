@@ -11,9 +11,12 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
+
     private static final String PREFS = "doclix_data_card";
     private static final String DIAG = "doclix_autofill_diag";
+
     private SharedPreferences prefs;
+
     private TextView status;
     private TextView diagnostic;
 
@@ -28,10 +31,14 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        prefs = getSharedPreferences(
+                PREFS,
+                MODE_PRIVATE);
+
         status = findViewById(R.id.status);
         diagnostic = findViewById(R.id.diagnostic);
 
@@ -46,19 +53,25 @@ public class MainActivity extends Activity {
 
         loadDataCard();
 
-        Button save = findViewById(R.id.save_data);
-        save.setOnClickListener(v -> saveDataCard());
+        Button save =
+                findViewById(R.id.save_data);
 
-        Button enable = findViewById(R.id.enable);
-        Button assist = findViewById(R.id.enable_assist);
-        assist.setOnClickListener(v -> {
-            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            startActivity(intent);
-        });
+        save.setOnClickListener(
+                v -> saveDataCard());
+
+        Button enable =
+                findViewById(R.id.enable);
 
         enable.setOnClickListener(v -> {
-            Intent intent = new Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE);
-            intent.setData(Uri.parse("package:" + getPackageName()));
+
+            Intent intent =
+                    new Intent(
+                            Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE);
+
+            intent.setData(
+                    Uri.parse(
+                            "package:" + getPackageName()));
+
             startActivity(intent);
         });
 
@@ -68,59 +81,138 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onResume() {
+
         super.onResume();
+
         updateStatus();
+        updateDiagnostic();
     }
 
     private void loadDataCard() {
-        firstName.setText(prefs.getString("first_name", ""));
-        middleName.setText(prefs.getString("middle_name", ""));
-        lastName.setText(prefs.getString("last_name", ""));
-        fullName.setText(prefs.getString("full_name", ""));
-        email.setText(prefs.getString("email", ""));
-        mobile.setText(prefs.getString("mobile", ""));
-        dob.setText(prefs.getString("dob", ""));
-        category.setText(prefs.getString("category", ""));
+
+        firstName.setText(
+                prefs.getString("first_name", ""));
+
+        middleName.setText(
+                prefs.getString("middle_name", ""));
+
+        lastName.setText(
+                prefs.getString("last_name", ""));
+
+        fullName.setText(
+                prefs.getString("full_name", ""));
+
+        email.setText(
+                prefs.getString("email", ""));
+
+        mobile.setText(
+                prefs.getString("mobile", ""));
+
+        dob.setText(
+                prefs.getString("dob", ""));
+
+        category.setText(
+                prefs.getString("category", ""));
     }
 
     private void saveDataCard() {
+
         prefs.edit()
-                .putString("first_name", firstName.getText().toString().trim())
-                .putString("middle_name", middleName.getText().toString().trim())
-                .putString("last_name", lastName.getText().toString().trim())
-                .putString("full_name", fullName.getText().toString().trim())
-                .putString("email", email.getText().toString().trim())
-                .putString("mobile", mobile.getText().toString().trim())
-                .putString("dob", dob.getText().toString().trim())
-                .putString("category", category.getText().toString().trim())
+                .putString(
+                        "first_name",
+                        firstName.getText()
+                                .toString().trim())
+
+                .putString(
+                        "middle_name",
+                        middleName.getText()
+                                .toString().trim())
+
+                .putString(
+                        "last_name",
+                        lastName.getText()
+                                .toString().trim())
+
+                .putString(
+                        "full_name",
+                        fullName.getText()
+                                .toString().trim())
+
+                .putString(
+                        "email",
+                        email.getText()
+                                .toString().trim())
+
+                .putString(
+                        "mobile",
+                        mobile.getText()
+                                .toString().trim())
+
+                .putString(
+                        "dob",
+                        dob.getText()
+                                .toString().trim())
+
+                .putString(
+                        "category",
+                        category.getText()
+                                .toString().trim())
+
                 .apply();
 
-        status.setText(R.string.data_card_saved);
+        status.setText(
+                R.string.data_card_saved);
+
+        updateDiagnostic();
     }
 
     private void updateDiagnostic() {
-        SharedPreferences d = getSharedPreferences(DIAG, MODE_PRIVATE);
-        int requests = d.getInt("requests", 0);
-        String type = d.getString("last_type", "");
-        boolean focused = d.getBoolean("focused", false);
-        int fills = d.getInt("accessibility_fills", 0);
-        boolean a11y = d.getBoolean("accessibility_enabled", false);
-        String at = d.getString("accessibility_last_type", "");
-        boolean ar = d.getBoolean("accessibility_last_result", false);
-        diagnostic.setText("Doclix status\nAutofill requests: " + requests
-                + "\nAutofill focused: " + (focused ? "YES" : "NO")
-                + "\nAutofill type: " + (type.isEmpty() ? "unknown" : type)
-                + "\nField Assist: " + (a11y ? "ON" : "OFF")
-                + "\nField Assist fills: " + fills
-                + "\nLast Assist field: " + (at.isEmpty() ? "none" : at)
-                + "\nLast Assist result: " + (ar ? "FILLED" : "—"));
+
+        SharedPreferences d =
+                getSharedPreferences(
+                        DIAG,
+                        MODE_PRIVATE);
+
+        int requests =
+                d.getInt("requests", 0);
+
+        String type =
+                d.getString("last_type", "");
+
+        boolean focused =
+                d.getBoolean(
+                        "focused",
+                        false);
+
+        diagnostic.setText(
+                "Native Autofill diagnostics"
+                        + "
+Requests: " + requests
+                        + "
+Focused field: "
+                        + (focused
+                        ? "YES"
+                        : "NO")
+                        + "
+Detected type: "
+                        + (type.isEmpty()
+                        ? "unknown"
+                        : type)
+                        + "
+Accessibility: NOT INCLUDED");
     }
 
     private void updateStatus() {
-        String service = Settings.Secure.getString(
-                getContentResolver(),
-                "autofill_service");
-        boolean enabled = service != null && service.contains(getPackageName());
+
+        String service =
+                Settings.Secure.getString(
+                        getContentResolver(),
+                        "autofill_service");
+
+        boolean enabled =
+                service != null
+                        && service.contains(
+                                getPackageName());
 
         status.setText(
                 enabled
