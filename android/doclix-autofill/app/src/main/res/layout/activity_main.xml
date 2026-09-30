@@ -23,14 +23,6 @@
             android:layout_marginTop="10dp"
             android:textSize="15sp" />
 
-        <TextView
-            android:id="@+id/diagnostic"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Native Autofill diagnostics"
-            android:textSize="13sp" />
-
         <EditText
             android:id="@+id/first_name"
             android:layout_width="match_parent"
@@ -105,7 +97,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Data is stored locally in this POC. Doclix uses the standard Android Autofill framework. OTP, CAPTCHA, face verification and payment remain manual."
+            android:text="Data is stored locally. Doclix uses the standard Android Autofill framework. OTP, CAPTCHA, face verification and payment remain manual."
             android:textSize="13sp" />
 
     </LinearLayout>
