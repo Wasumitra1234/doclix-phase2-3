@@ -481,8 +481,7 @@ public class DoclixAutofillService extends AutofillService {
     private String classify(
             AssistStructure.ViewNode node) {
 
-        String[] hints =
-                node.getAutofillHints();
+        String[] hints = node.getAutofillHints();
 
         String hint =
                 hints == null
@@ -504,62 +503,11 @@ public class DoclixAutofillService extends AutofillService {
                         ? ""
                         : node.getWebDomain();
 
-        String all =
-                (hint + " "
-                        + resourceId + " "
-                        + placeholder + " "
-                        + webDomain)
-                        .toLowerCase(Locale.ROOT);
-
-        // Chrome/DigiALM commonly exposes labels/placeholders such as
-        // "Candidate Middle Name". Normalize separators so spaces, hyphens
-        // and underscores are treated consistently.
-        String normalized =
-                all.replaceAll("[^a-z0-9]+", "_");
-
-        if (normalized.contains("email")) {
-            return "email";
-        }
-
-        if (all.contains("phone")
-                || all.contains("mobile")
-                || all.contains("tel")) {
-            return "mobile";
-        }
-
-        if (all.contains("birth")
-                || all.contains("dob")) {
-            return "dob";
-        }
-
-        if (normalized.contains("category")
-                || normalized.contains("caste")) {
-            return "category";
-        }
-
-        // Check full name before first/middle/last name.
-        if (normalized.contains("full_name")
-                || normalized.contains("fullname")) {
-            return "full_name";
-        }
-
-        if (normalized.contains("middle_name")
-                || normalized.contains("middlename")) {
-            return "middle_name";
-        }
-
-        if (normalized.contains("first_name")
-                || normalized.contains("firstname")) {
-            return "first_name";
-        }
-
-        if (normalized.contains("last_name")
-                || normalized.contains("lastname")
-                || normalized.contains("surname")) {
-            return "last_name";
-        }
-
-        return "";
+        return FieldClassifier.classify(
+                hint,
+                resourceId,
+                placeholder,
+                webDomain);
     }
 
     private static final class FieldIds {
