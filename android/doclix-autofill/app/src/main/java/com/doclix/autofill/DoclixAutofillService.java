@@ -327,6 +327,7 @@ public class DoclixAutofillService extends AutofillService {
         String placeholder = node.getHint() == null ? "" : node.getHint().toString();
         String text = node.getText() == null ? "" : node.getText().toString();
 
+        String htmlAttributes = "";
         String webDomain = node.getWebDomain() == null ? "" : node.getWebDomain();
 
         return FieldClassifier.classify(
