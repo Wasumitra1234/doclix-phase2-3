@@ -327,20 +327,6 @@ public class DoclixAutofillService extends AutofillService {
         String placeholder = node.getHint() == null ? "" : node.getHint().toString();
         String text = node.getText() == null ? "" : node.getText().toString();
 
-        String htmlAttributes = "";
-        AssistStructure.ViewNode.HtmlInfo htmlInfo = node.getHtmlInfo();
-        if (htmlInfo != null && htmlInfo.getAttributes() != null) {
-            StringBuilder attributes = new StringBuilder();
-            for (android.util.Pair<String, String> attribute
-                    : htmlInfo.getAttributes()) {
-                attributes.append(' ')
-                        .append(attribute.first)
-                        .append('=')
-                        .append(attribute.second);
-            }
-            htmlAttributes = attributes.toString();
-        }
-
         String webDomain = node.getWebDomain() == null ? "" : node.getWebDomain();
 
         return FieldClassifier.classify(
