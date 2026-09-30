@@ -511,7 +511,13 @@ public class DoclixAutofillService extends AutofillService {
                         + webDomain)
                         .toLowerCase(Locale.ROOT);
 
-        if (all.contains("email")) {
+        // Chrome/DigiALM commonly exposes labels/placeholders such as
+        // "Candidate Middle Name". Normalize separators so spaces, hyphens
+        // and underscores are treated consistently.
+        String normalized =
+                all.replaceAll("[^a-z0-9]+", "_");
+
+        if (normalized.contains("email")) {
             return "email";
         }
 
@@ -526,33 +532,30 @@ public class DoclixAutofillService extends AutofillService {
             return "dob";
         }
 
-        if (all.contains("category")
-                || all.contains("caste")) {
+        if (normalized.contains("category")
+                || normalized.contains("caste")) {
             return "category";
         }
 
-        if (all.contains("full_name")
-                || all.contains("fullname")
-                || all.contains("full-name")) {
+        // Check full name before first/middle/last name.
+        if (normalized.contains("full_name")
+                || normalized.contains("fullname")) {
             return "full_name";
         }
 
-        if (all.contains("middle_name")
-                || all.contains("middlename")
-                || all.contains("middle-name")) {
+        if (normalized.contains("middle_name")
+                || normalized.contains("middlename")) {
             return "middle_name";
         }
 
-        if (all.contains("first_name")
-                || all.contains("firstname")
-                || all.contains("first-name")) {
+        if (normalized.contains("first_name")
+                || normalized.contains("firstname")) {
             return "first_name";
         }
 
-        if (all.contains("last_name")
-                || all.contains("lastname")
-                || all.contains("last-name")
-                || all.contains("surname")) {
+        if (normalized.contains("last_name")
+                || normalized.contains("lastname")
+                || normalized.contains("surname")) {
             return "last_name";
         }
 
