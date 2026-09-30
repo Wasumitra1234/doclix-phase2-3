@@ -13,6 +13,9 @@ import android.service.autofill.FillContext;
 import android.service.autofill.FillRequest;
 import android.service.autofill.FillResponse;
 import android.service.autofill.InlinePresentation;
+import android.text.InputType;
+import android.util.Pair;
+import android.view.ViewStructure;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
 import android.view.inputmethod.InlineSuggestionsRequest;
@@ -72,10 +75,6 @@ public class DoclixAutofillService extends AutofillService {
                     0);
         }
 
-        // Chrome/WebView can expose more than one node as focused during a
-        // request. Never take the first focused node blindly. Prefer a
-        // semantically classified focused node, and among those prefer the
-        // deepest node (the actual input is normally deeper than containers).
         FocusResult focused = chooseFocused(focusedCandidates);
         String focusedType = focused == null ? "" : focused.type;
 
@@ -101,13 +100,12 @@ public class DoclixAutofillService extends AutofillService {
                 return;
             }
 
-            // Unknown/unsupported focused field: do NOT guess by returning
-            // First Name as the first suggestion. Returning null is safer.
+            // Unknown / unsupported field: never guess.
             callback.onSuccess(null);
             return;
         }
 
-        // No focused field: return only deterministic field-to-ID mappings.
+        // No focused field: deterministic field-to-ID mappings only.
         FillResponse.Builder response = new FillResponse.Builder();
         boolean added = false;
 
@@ -190,6 +188,9 @@ public class DoclixAutofillService extends AutofillService {
                     presentation);
         }
 
+        // The dataset contains exactly this focused AutofillId. Therefore the
+        // Email ID and Confirm Email ID nodes receive independent datasets
+        // when Chrome asks for each focused field.
         response.addDataset(dataset.build());
         return true;
     }
@@ -319,24 +320,88 @@ public class DoclixAutofillService extends AutofillService {
         }
     }
 
-    private String classify(AssistStructure.ViewNode node) {
-        String[] hints = node.getAutofillHints();
-        String hint = hints == null ? "" : String.join(" ", hints);
+    /*
+     * Package-private for deterministic unit testing of the exact metadata
+     * path used by classify(ViewNode). The production entry point below reads
+     * the real AssistStructure.ViewNode.
+     */
+    static String classifyMetadataForTest(
+            String[] autofillHints,
+            String resourceId,
+            String placeholder,
+            String contentDescription,
+            String htmlAttributes,
+            int inputType) {
 
-        String resourceId = node.getIdEntry() == null ? "" : node.getIdEntry();
-        String placeholder = node.getHint() == null ? "" : node.getHint().toString();
-        String text = node.getText() == null ? "" : node.getText().toString();
-
-        String htmlAttributes = "";
-        String webDomain = node.getWebDomain() == null ? "" : node.getWebDomain();
+        String hint = autofillHints == null ? "" : String.join(" ", autofillHints);
 
         return FieldClassifier.classify(
                 hint,
                 resourceId,
                 placeholder,
-                text,
+                contentDescription,
                 htmlAttributes,
-                webDomain);
+                inputType);
+    }
+
+    private String classify(AssistStructure.ViewNode node) {
+        String[] hints = node.getAutofillHints();
+
+        String resourceId = node.getIdEntry() == null
+                ? ""
+                : node.getIdEntry();
+
+        String placeholder = node.getHint() == null
+                ? ""
+                : node.getHint();
+
+        String contentDescription = node.getContentDescription() == null
+                ? ""
+                : node.getContentDescription().toString();
+
+        String htmlAttributes = htmlAttributes(node.getHtmlInfo());
+
+        return FieldClassifier.classify(
+                hints == null ? "" : String.join(" ", hints),
+                resourceId,
+                placeholder,
+                contentDescription,
+                htmlAttributes,
+                node.getInputType());
+    }
+
+    private static String htmlAttributes(ViewStructure.HtmlInfo htmlInfo) {
+        if (htmlInfo == null) {
+            return "";
+        }
+
+        StringBuilder out = new StringBuilder();
+
+        String tag = htmlInfo.getTag();
+        if (tag != null && !tag.isEmpty()) {
+            out.append("tag=").append(tag).append(' ');
+        }
+
+        List<Pair<String, String>> attributes = htmlInfo.getAttributes();
+        if (attributes != null) {
+            for (Pair<String, String> attribute : attributes) {
+                if (attribute == null) {
+                    continue;
+                }
+
+                if (attribute.first != null) {
+                    out.append(attribute.first);
+                }
+
+                if (attribute.second != null) {
+                    out.append('=').append(attribute.second);
+                }
+
+                out.append(' ');
+            }
+        }
+
+        return out.toString();
     }
 
     private static final class FieldIds {
