@@ -6,19 +6,8 @@ import java.util.Locale;
 
 final class FieldClassifier {
 
-    private FieldClassifier() {
-    }
+    private FieldClassifier() {}
 
-    /*
-     * Deterministic priority:
-     *   0) hard safety exclusions from semantic metadata / HTML
-     *   1) Android autofill hints
-     *   2) resource id / hint / content-description
-     *   3) HTML attributes
-     *   4) explicit email inputType fallback
-     *
-     * Current text value is intentionally NOT used for classification.
-     */
     static String classify(
             String autofillHints,
             String resourceId,
@@ -27,40 +16,36 @@ final class FieldClassifier {
             String htmlAttributes,
             int inputType) {
 
-        String semanticMetadata = join(
+        // Priority 0: safety guardrail. Run before every positive classifier.
+        String merged = join(
                 resourceId,
                 placeholder,
                 contentDescription,
                 htmlAttributes);
 
-        // Hard guardrails must run before any positive hint. A WhatsApp /
-        // alternate / emergency field must never inherit the primary mobile
-        // Data Card value merely because the browser reports a phone hint.
-        if (isAuxiliaryContact(semanticMetadata)) {
+        if (isAuxiliaryContact(merged)) {
             return "";
         }
 
-        // 1. Android Autofill hints.
-        String byHint = classifyHints(autofillHints);
-        if (!byHint.isEmpty()) {
-            return byHint;
+        // Priority 1: Android Autofill hints.
+        String result = classifyHints(autofillHints);
+        if (!result.isEmpty()) {
+            return result;
         }
 
-        // 2. resource id / hint / content-description.
-        String bySemanticMetadata = classifyText(resourceId, placeholder, contentDescription);
-        if (!bySemanticMetadata.isEmpty()) {
-            return bySemanticMetadata;
+        // Priority 2: standard UI metadata.
+        result = classifyText(resourceId, placeholder, contentDescription);
+        if (!result.isEmpty()) {
+            return result;
         }
 
-        // 3. HTML metadata (name, id, type, placeholder, title, etc.).
-        String byHtml = classifyText(htmlAttributes);
-        if (!byHtml.isEmpty()) {
-            return byHtml;
+        // Priority 3: HTML metadata.
+        result = classifyText(htmlAttributes);
+        if (!result.isEmpty()) {
+            return result;
         }
 
-        // 4. Last-resort email signal. Chrome/WebView may expose the HTML
-        // <input type="email"> semantics through InputType even when labels
-        // and HtmlInfo attributes are sparse.
+        // Priority 4: explicit Android email input-type variation.
         int variation = inputType & InputType.TYPE_MASK_VARIATION;
         if (variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
                 || variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS) {
@@ -73,40 +58,22 @@ final class FieldClassifier {
     private static String classifyHints(String hints) {
         String normalized = normalize(hints);
 
-        if (containsAny(normalized,
-                "emailaddress",
-                "email_address")) {
+        if (containsAny(normalized, "emailaddress", "email_address")) {
             return "email";
         }
-
-        if (containsAny(normalized,
-                "phone",
-                "phonenumber",
-                "phone_number")) {
+        if (containsAny(normalized, "phone", "phonenumber", "phone_number")) {
             return "mobile";
         }
-
-        if (containsAny(normalized,
-                "persongivenname",
-                "person_given_name")) {
+        if (containsAny(normalized, "persongivenname", "person_given_name")) {
             return "first_name";
         }
-
-        if (containsAny(normalized,
-                "personmiddlename",
-                "person_middle_name")) {
+        if (containsAny(normalized, "personmiddlename", "person_middle_name")) {
             return "middle_name";
         }
-
-        if (containsAny(normalized,
-                "personfamilyname",
-                "person_family_name")) {
+        if (containsAny(normalized, "personfamilyname", "person_family_name")) {
             return "last_name";
         }
-
-        if (containsAny(normalized,
-                "personname",
-                "name")) {
+        if (containsAny(normalized, "personname", "name")) {
             return "full_name";
         }
 
@@ -116,8 +83,9 @@ final class FieldClassifier {
     private static String classifyText(String... values) {
         String normalized = normalize(join(values));
 
-        // Email must be checked before name / generic text keys.
-        if (containsAny(normalized,
+        // Email before generic/name/mobile heuristics.
+        if (containsAny(
+                normalized,
                 "confirm_email_id",
                 "confirm_email",
                 "confirmemailid",
@@ -130,7 +98,8 @@ final class FieldClassifier {
             return "email";
         }
 
-        if (containsAny(normalized,
+        if (containsAny(
+                normalized,
                 "mobile",
                 "phone",
                 "telephone",
@@ -140,7 +109,8 @@ final class FieldClassifier {
             return "mobile";
         }
 
-        if (containsAny(normalized,
+        if (containsAny(
+                normalized,
                 "dateofbirth",
                 "date_of_birth",
                 "birthdate",
@@ -149,13 +119,12 @@ final class FieldClassifier {
             return "dob";
         }
 
-        if (containsAny(normalized,
-                "category",
-                "caste")) {
+        if (containsAny(normalized, "category", "caste")) {
             return "category";
         }
 
-        if (containsAny(normalized,
+        if (containsAny(
+                normalized,
                 "candidatefullname",
                 "candidate_full_name",
                 "full_name",
@@ -163,7 +132,8 @@ final class FieldClassifier {
             return "full_name";
         }
 
-        if (containsAny(normalized,
+        if (containsAny(
+                normalized,
                 "candidatemiddlename",
                 "candidate_middle_name",
                 "middle_name",
@@ -171,7 +141,8 @@ final class FieldClassifier {
             return "middle_name";
         }
 
-        if (containsAny(normalized,
+        if (containsAny(
+                normalized,
                 "candidatefirstname",
                 "candidate_first_name",
                 "first_name",
@@ -179,7 +150,8 @@ final class FieldClassifier {
             return "first_name";
         }
 
-        if (containsAny(normalized,
+        if (containsAny(
+                normalized,
                 "candidatelastname",
                 "candidate_last_name",
                 "last_name",
@@ -194,7 +166,8 @@ final class FieldClassifier {
     private static boolean isAuxiliaryContact(String values) {
         String normalized = normalize(values);
 
-        return containsAny(normalized,
+        return containsAny(
+                normalized,
                 "whatsapp",
                 "whatsapp_no",
                 "whatsapp_number",
@@ -216,20 +189,17 @@ final class FieldClassifier {
             return "";
         }
 
-        return value
-                .toLowerCase(Locale.ROOT)
+        return value.toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "_");
     }
 
     private static String join(String... values) {
         StringBuilder out = new StringBuilder();
-
         for (String value : values) {
             if (value != null && !value.isEmpty()) {
                 out.append(' ').append(value);
             }
         }
-
         return out.toString();
     }
 
