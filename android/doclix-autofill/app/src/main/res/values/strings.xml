@@ -5,4 +5,6 @@
     <string name="enable_autofill">Enable Doclix Autofill</string>
     <string name="status_disabled">Autofill service is not enabled.</string>
     <string name="status_enabled">Doclix Autofill is enabled.</string>
+    <string name="save_data_card">Save Data Card</string>
+    <string name="data_card_saved">Data Card saved locally.</string>
 </resources>
