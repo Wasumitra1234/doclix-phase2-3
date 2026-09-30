@@ -65,7 +65,7 @@ jobs:
           test -n "$AAPT"
 
           "$AAPT" dump permissions "$APK" > /tmp/doclix-permissions.txt
-          "$AAPT" dump xmltree "$APK" --file AndroidManifest.xml > /tmp/doclix-manifest.txt
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml > /tmp/doclix-manifest.txt
 
           if grep -Fq "BIND_ACCESSIBILITY_SERVICE" /tmp/doclix-permissions.txt; then
             echo "ERROR: Accessibility binding permission is present."
