@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Doclix Autofill</string>
+    <string name="service_label">Doclix Autofill Service</string>
+    <string name="enable_autofill">Enable Doclix Autofill</string>
+    <string name="status_disabled">Autofill service is not enabled.</string>
+    <string name="status_enabled">Doclix Autofill is enabled.</string>
+</resources>
