@@ -13,7 +13,7 @@ public class FieldClassifierTest {
             String text,
             String html) {
         return FieldClassifier.classify(
-                hints, id, placeholder, text, html, "digialm.com");
+                hints, id, placeholder, text, "", html, 0);
     }
 
     @Test
