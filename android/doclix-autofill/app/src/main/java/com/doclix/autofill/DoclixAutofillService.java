@@ -71,53 +71,47 @@ public class DoclixAutofillService extends AutofillService {
         }
 
         if (focusedId != null) {
-            String autofillValue = valueForType(focusedType);
+            // Prefer an exact field match. If Chrome does not expose enough
+            // metadata to classify the focused web field, return multiple
+            // datasets for that same field so the user can choose the correct
+            // Doclix value. This is safer than guessing a field type.
+            if (!focusedType.isEmpty()) {
+                String autofillValue = valueForType(focusedType);
 
-            if (autofillValue.isEmpty()) {
-                callback.onSuccess(null);
-                return;
-            }
-
-            Dataset.Builder dataset = new Dataset.Builder();
-            RemoteViews menuPresentation =
-                    createPresentation(labelForType(focusedType), autofillValue);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                InlineSuggestionsRequest inlineRequest =
-                        request.getInlineSuggestionsRequest();
-
-                if (inlineRequest != null
-                        && inlineRequest.getMaxSuggestionCount() > 0
-                        && !inlineRequest.getInlinePresentationSpecs().isEmpty()) {
-
-                    InlinePresentationSpec spec =
-                            inlineRequest.getInlinePresentationSpecs().get(0);
-
-                    InlinePresentation inlinePresentation =
-                            createInlinePresentation(autofillValue, spec);
-
-                    dataset.setValue(
+                if (!autofillValue.isEmpty()) {
+                    FillResponse.Builder response = new FillResponse.Builder();
+                    addFocusedDataset(
+                            response,
                             focusedId,
-                            AutofillValue.forText(autofillValue),
-                            menuPresentation,
-                            inlinePresentation);
-                } else {
-                    dataset.setValue(
-                            focusedId,
-                            AutofillValue.forText(autofillValue),
-                            menuPresentation);
+                            autofillValue,
+                            labelForType(focusedType),
+                            request);
+                    callback.onSuccess(response.build());
+                    return;
                 }
-            } else {
-                dataset.setValue(
-                        focusedId,
-                        AutofillValue.forText(autofillValue),
-                        menuPresentation);
             }
 
-            callback.onSuccess(
-                    new FillResponse.Builder()
-                            .addDataset(dataset.build())
-                            .build());
+            FillResponse.Builder response = new FillResponse.Builder();
+            boolean added = false;
+
+            added |= addFocusedDataset(
+                    response, focusedId, value("first_name"), "First Name", request);
+            added |= addFocusedDataset(
+                    response, focusedId, value("middle_name"), "Middle Name", request);
+            added |= addFocusedDataset(
+                    response, focusedId, value("last_name"), "Last Name", request);
+            added |= addFocusedDataset(
+                    response, focusedId, value("full_name"), "Full Name", request);
+            added |= addFocusedDataset(
+                    response, focusedId, value("email"), "Email", request);
+            added |= addFocusedDataset(
+                    response, focusedId, value("mobile"), "Mobile", request);
+            added |= addFocusedDataset(
+                    response, focusedId, value("dob"), "Date of Birth", request);
+            added |= addFocusedDataset(
+                    response, focusedId, value("category"), "Category", request);
+
+            callback.onSuccess(added ? response.build() : null);
             return;
         }
 
@@ -134,6 +128,56 @@ public class DoclixAutofillService extends AutofillService {
         added |= addDataset(response, fields.category, value("category"), "Category");
 
         callback.onSuccess(added ? response.build() : null);
+    }
+
+    private boolean addFocusedDataset(
+            FillResponse.Builder response,
+            AutofillId id,
+            String value,
+            String label,
+            FillRequest request) {
+
+        if (id == null || value == null || value.isEmpty()) {
+            return false;
+        }
+
+        Dataset.Builder dataset = new Dataset.Builder();
+        RemoteViews presentation = createPresentation(label, value);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            InlineSuggestionsRequest inlineRequest =
+                    request.getInlineSuggestionsRequest();
+
+            if (inlineRequest != null
+                    && inlineRequest.getMaxSuggestionCount() > 0
+                    && !inlineRequest.getInlinePresentationSpecs().isEmpty()) {
+
+                InlinePresentationSpec spec =
+                        inlineRequest.getInlinePresentationSpecs().get(0);
+
+                InlinePresentation inlinePresentation =
+                        createInlinePresentation(value, spec);
+
+                dataset.setValue(
+                        id,
+                        AutofillValue.forText(value),
+                        presentation,
+                        inlinePresentation);
+            } else {
+                dataset.setValue(
+                        id,
+                        AutofillValue.forText(value),
+                        presentation);
+            }
+        } else {
+            dataset.setValue(
+                    id,
+                    AutofillValue.forText(value),
+                    presentation);
+        }
+
+        response.addDataset(dataset.build());
+        return true;
     }
 
     private boolean addDataset(
