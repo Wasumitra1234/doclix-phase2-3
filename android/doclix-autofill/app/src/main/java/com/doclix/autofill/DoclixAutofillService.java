@@ -344,27 +344,6 @@ public class DoclixAutofillService extends AutofillService {
                 inputType);
     }
 
-    static String classifyMetadataForTest(
-            String[] autofillHints,
-            String resourceId,
-            String placeholder,
-            String contentDescription,
-            String htmlAttributes,
-            int inputType) {
-
-        String hints = autofillHints == null
-                ? ""
-                : String.join(" ", autofillHints);
-
-        return FieldClassifier.classify(
-                hints,
-                resourceId,
-                placeholder,
-                contentDescription,
-                htmlAttributes,
-                inputType);
-    }
-
     private String classify(AssistStructure.ViewNode node) {
         String[] hints = node.getAutofillHints();
 
